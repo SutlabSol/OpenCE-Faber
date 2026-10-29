@@ -1,0 +1,493 @@
+/*
+XBOX_MEMORY.C
+
+Xbox contiguous memory (XPhysicalAlloc) and page protection for the Linux
+build.
+
+On the Xbox, physical memory at address P is visible at virtual address
+0x80000000 + P. The game asks for its game state and tag cache at fixed
+addresses that way (physical_memory_map.c), and Direct3D resources carry
+physical addresses in their Data fields. A 32-bit Linux process on a 64-bit
+kernel owns the whole 4 GB address space, so the layer reserves the same
+virtual window at start-up and allocates page-granular blocks inside it:
+placed requests at exactly the address asked for, the rest top-down as the
+Xbox kernel does.
+
+Halo Custom Edition maps need the window their tag data is linked to,
+0x40440000, reserved the same way when the game.custom_edition setting is on
+(port/linux/game/custom_edition_cache.c).
+
+The web build (HALO_WEB) has no pages to map or protect: WebAssembly's
+memory is one block, made large enough that the window is its top 128 MB
+(tools/web_build.py), and the C heap stays below it (port/web/src/web_main.c).
+A block is cleared when it is allocated, as fresh pages would be, and
+protection is only remembered. The Custom Edition window lies in the C
+heap's range there, which grows around it (port/web/src/web_main.c).
+*/
+
+#include "platform.h"
+#include "port_config.h"
+#include "../game/cache_file_formats.h"
+#ifdef HALO_GUEST
+/* the window the guests' host reserves (port/android/host/host_memory.c) */
+#include "halo_android_abi.h"
+#endif
+#ifdef HALO_ANDROID
+/* (PORT_CUSTOM_EDITION_IS_LINKED) */
+#include "halo_port_window.h"
+#endif
+
+#include <errno.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/mman.h>
+#include <unistd.h>
+
+#ifdef HALO_WEB
+/* the memory's size: whether it covers the window */
+#define web_memory_bytes() ((unsigned long long)__builtin_wasm_memory_size(0) << 16)
+#endif
+
+/* (Android's window is where and as large as the host found room for, at
+run time: its caches are half of it, halo_port_capacity.h) */
+#ifndef HALO_ANDROID
+#ifdef HALO_GUEST
+typedef char window_is_the_hosts[
+#ifndef HALO_MOVABLE_WINDOW
+	PLATFORM_CONTIGUOUS_BASE == HALO_GUEST_WINDOW_BASE &&
+#endif
+	PLATFORM_CONTIGUOUS_SIZE == HALO_GUEST_WINDOW_SIZE ? 1 : -1];
+#endif
+/* the texture and sound caches, which the window hands out top-down, fit
+above the game state (halo_port_capacity.h; measured from where the game
+data is linked, as the window may be elsewhere) */
+typedef char caches_fit_the_window[HALO_PORT_GAME_STATE_BASE_ADDRESS + HALO_PORT_GAME_STATE_SIZE -
+	0x80000000UL + HALO_PORT_TEXTURE_CACHE_SIZE + HALO_PORT_SOUND_CACHE_SIZE <=
+	PLATFORM_CONTIGUOUS_SIZE ? 1 : -1];
+#endif
+
+#define PAGE_SIZE_BYTES 0x1000UL
+#define CONTIGUOUS_PAGE_COUNT (PLATFORM_CONTIGUOUS_SIZE / PAGE_SIZE_BYTES)
+
+/* per page: 0 free, otherwise the protection of the block (PAGE_*); the
+first page of a block also records the block length */
+static DWORD page_protection[PLATFORM_CONTIGUOUS_MAXIMUM / PAGE_SIZE_BYTES];
+static unsigned long block_page_count[PLATFORM_CONTIGUOUS_MAXIMUM / PAGE_SIZE_BYTES];
+static BOOL arena_reserved = FALSE;
+static pthread_mutex_t arena_lock = PTHREAD_MUTEX_INITIALIZER;
+static void *custom_edition_tag_cache = NULL;
+/* why custom_edition_tag_cache is NULL, for debug.txt
+(halo_custom_edition_tag_cache_problem) */
+static char custom_edition_tag_cache_problem[320];
+static void custom_edition_tag_cache_problem_describe(void *wanted, int error_number);
+#ifdef HALO_ANDROID
+static BOOL custom_edition_tag_cache_place_elsewhere(void);
+#endif
+
+#ifdef HALO_ANDROID
+/* the host puts the window where the address space was free and passes the
+address in the boot structure, before the constructor below runs */
+unsigned long platform_contiguous_base = 0x80000000UL;
+unsigned long platform_contiguous_size = 0x08000000UL;
+/* how far the Custom Edition tag cache is from its linked address, where it
+could not be put there (custom_edition_tag_cache_reserve;
+halo_port_window.h's PORT_CUSTOM_EDITION_SHIFT) */
+unsigned long platform_custom_edition_shift;
+#elif defined(HALO_MOVABLE_WINDOW)
+/* (the PS5's x32 guest: the base only, its size is fixed) */
+unsigned long platform_contiguous_base = 0x80000000UL;
+#endif
+
+static int protection_to_host(DWORD protect)
+{
+	switch (protect & 0xff)
+	{
+	case PAGE_NOACCESS: return PROT_NONE;
+	case PAGE_READONLY: return PROT_READ;
+	case PAGE_EXECUTE: return PROT_EXEC;
+	case PAGE_EXECUTE_READ: return PROT_READ | PROT_EXEC;
+	case PAGE_EXECUTE_READWRITE: return PROT_READ | PROT_WRITE | PROT_EXEC;
+	default: return PROT_READ | PROT_WRITE;
+	}
+}
+
+/* Reserve the window before anything else can map into it. */
+__attribute__((constructor(101)))
+static void contiguous_arena_reserve(void)
+{
+#ifdef HALO_WEB
+	if (web_memory_bytes() >= (unsigned long long)PLATFORM_CONTIGUOUS_BASE + PLATFORM_CONTIGUOUS_SIZE)
+		arena_reserved = TRUE;
+	else
+		platform_log("the WebAssembly memory (%llu bytes) does not cover the Xbox contiguous memory window",
+			web_memory_bytes());
+#else
+	void *wanted = (void *)PLATFORM_CONTIGUOUS_BASE;
+	void *result = mmap(wanted, PLATFORM_CONTIGUOUS_SIZE, PROT_NONE,
+		MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE | MAP_FIXED_NOREPLACE, -1, 0);
+
+	if (result == wanted)
+	{
+		arena_reserved = TRUE;
+		platform_log("Xbox contiguous memory window: %lu MB at %p",
+			(unsigned long)(PLATFORM_CONTIGUOUS_SIZE / (1024 * 1024)), wanted);
+	}
+	else
+	{
+		if (result != MAP_FAILED)
+			munmap(result, PLATFORM_CONTIGUOUS_SIZE);
+		platform_log("cannot reserve the Xbox contiguous memory window of %lu MB at %p (%s)",
+			(unsigned long)(PLATFORM_CONTIGUOUS_SIZE / (1024 * 1024)), wanted, strerror(errno));
+	}
+#endif
+}
+
+/* The Custom Edition tag cache, reserved before anything else can map into
+it (its pages are backed as they are touched); only when Custom Edition maps
+may run, as it takes 23 MB of the address space. */
+__attribute__((constructor(102)))
+static void custom_edition_tag_cache_reserve(void)
+{
+	void *wanted = (void *)CUSTOM_EDITION_TAG_CACHE_ADDRESS;
+	void *result;
+
+#ifdef HALO_WEB
+	/* (the heap leaves the window alone, and the settings are not read
+	before the page's are in place: halo_custom_edition_tag_cache) */
+	(void)wanted;
+	(void)result;
+	return;
+#endif
+	if (!config_boolean("game.custom_edition"))
+	{
+		snprintf(custom_edition_tag_cache_problem, sizeof(custom_edition_tag_cache_problem),
+			"game.custom_edition is off in config.toml");
+		return;
+	}
+#ifdef HALO_ANDROID
+	/* (as on a phone whose Java runtime holds the address) */
+	if (config_boolean("debug.custom_edition_moved"))
+	{
+		platform_log("debug.custom_edition_moved: the Custom Edition tag cache is put elsewhere");
+		if (!custom_edition_tag_cache_place_elsewhere())
+			snprintf(custom_edition_tag_cache_problem, sizeof(custom_edition_tag_cache_problem),
+				"debug.custom_edition_moved found no room for it");
+		return;
+	}
+#endif
+	result = mmap(wanted, CUSTOM_EDITION_TAG_CACHE_BYTES, PROT_READ | PROT_WRITE,
+		MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE | MAP_FIXED_NOREPLACE, -1, 0);
+	if (result == wanted)
+	{
+		custom_edition_tag_cache = result;
+	}
+	else
+	{
+		/* (a kernel that takes MAP_FIXED_NOREPLACE as a hint answers
+		elsewhere, and errno is not its say) */
+		int error_number = result != MAP_FAILED ? EEXIST : errno;
+
+		if (result != MAP_FAILED)
+			munmap(result, CUSTOM_EDITION_TAG_CACHE_BYTES);
+		custom_edition_tag_cache_problem_describe(wanted, error_number);
+#ifdef HALO_ANDROID
+		/* (the Java runtime's large object space can hold it, from before
+		the game's process started: the tag cache goes wherever there is
+		room, and its maps' addresses are moved to it as they are checked,
+		as the window's are: PORT_CUSTOM_EDITION_SHIFT) */
+		if (custom_edition_tag_cache_place_elsewhere())
+			return;
+#endif
+		platform_log("cannot reserve the Custom Edition tag cache at %p (%s): Custom Edition maps cannot run",
+			wanted, strerror(error_number));
+	}
+}
+
+#ifdef HALO_ANDROID
+/* the tag cache somewhere free, on the 64 KB its linked address is on;
+TRUE if it was put there */
+static BOOL custom_edition_tag_cache_place_elsewhere(void)
+{
+	unsigned long alignment = 0x10000UL;
+	unsigned long size = CUSTOM_EDITION_TAG_CACHE_BYTES + alignment;
+	unsigned char *result = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+	unsigned char *base;
+
+	if (result == MAP_FAILED)
+	{
+		platform_log("no room elsewhere for the Custom Edition tag cache (%s)", strerror(errno));
+		return FALSE;
+	}
+	base = (unsigned char *)(((unsigned long)result + alignment - 1) & ~(alignment - 1));
+	if (base > result)
+		munmap(result, (size_t)(base - result));
+	if (result + size > base + CUSTOM_EDITION_TAG_CACHE_BYTES)
+		munmap(base + CUSTOM_EDITION_TAG_CACHE_BYTES, (size_t)(result + size - (base + CUSTOM_EDITION_TAG_CACHE_BYTES)));
+	/* (never in the linked range itself, which PORT_WINDOW_REBASE would
+	take for addresses still to move) */
+	if (PORT_CUSTOM_EDITION_IS_LINKED(base) || PORT_CUSTOM_EDITION_IS_LINKED(base + CUSTOM_EDITION_TAG_CACHE_BYTES - 1))
+	{
+		munmap(base, CUSTOM_EDITION_TAG_CACHE_BYTES);
+		platform_log("the room found for the Custom Edition tag cache, %p, overlaps its linked address", (void *)base);
+		return FALSE;
+	}
+	custom_edition_tag_cache = base;
+	platform_custom_edition_shift = (unsigned long)base - CUSTOM_EDITION_TAG_CACHE_ADDRESS;
+	platform_log("the Custom Edition tag cache is at %p, its address %p being taken: its maps' addresses are moved to it",
+		(void *)base, (void *)CUSTOM_EDITION_TAG_CACHE_ADDRESS);
+	return TRUE;
+}
+#endif
+
+/* the reason Custom Edition maps cannot run, with the first mapping in the
+tag cache's range when /proc/self/maps names one (on Android, usually the
+Java runtime's heap) */
+static void custom_edition_tag_cache_problem_describe(void *wanted, int error_number)
+{
+	unsigned long long first = (unsigned long long)(uintptr_t)wanted;
+	unsigned long long last = first + CUSTOM_EDITION_TAG_CACHE_BYTES;
+	FILE *maps = fopen("/proc/self/maps", "r");
+	char line[256], in_the_way[200] = "";
+
+	while (maps && fgets(line, sizeof(line), maps))
+	{
+		unsigned long long start, end;
+
+		if (sscanf(line, "%llx-%llx", &start, &end) == 2 && end > first && start < last)
+		{
+			line[strcspn(line, "\n")] = 0;
+			snprintf(in_the_way, sizeof(in_the_way), "; in the way: %s", line);
+			break;
+		}
+	}
+	if (maps)
+		fclose(maps);
+	snprintf(custom_edition_tag_cache_problem, sizeof(custom_edition_tag_cache_problem),
+		"the address %08llx-%08llx its tags are made for is taken (%s)%s", first, last, strerror(error_number),
+		in_the_way);
+}
+
+const char *halo_custom_edition_tag_cache_problem(void)
+{
+	return halo_custom_edition_tag_cache() ? "" : custom_edition_tag_cache_problem;
+}
+
+void *halo_custom_edition_tag_cache(void)
+{
+#ifdef HALO_WEB
+	if (!config_boolean("game.custom_edition"))
+		return NULL;
+	return (void *)CUSTOM_EDITION_TAG_CACHE_ADDRESS;
+#else
+	return custom_edition_tag_cache;
+#endif
+}
+
+BOOL platform_is_contiguous(const void *address)
+{
+	unsigned long value = (unsigned long)address;
+
+	return value >= PLATFORM_CONTIGUOUS_BASE && value - PLATFORM_CONTIGUOUS_BASE < PLATFORM_CONTIGUOUS_SIZE;
+}
+
+static BOOL pages_free(unsigned long first, unsigned long count)
+{
+	unsigned long page;
+
+	if (first + count > CONTIGUOUS_PAGE_COUNT)
+		return FALSE;
+	for (page = first; page < first + count; page++)
+	{
+		if (page_protection[page])
+			return FALSE;
+	}
+	return TRUE;
+}
+
+void *platform_contiguous_alloc(unsigned long size, unsigned long alignment,
+	unsigned long physical_address, DWORD protect)
+{
+	unsigned long count = (size + PAGE_SIZE_BYTES - 1) / PAGE_SIZE_BYTES;
+	unsigned long alignment_pages = alignment > PAGE_SIZE_BYTES ? alignment / PAGE_SIZE_BYTES : 1;
+	unsigned long first = CONTIGUOUS_PAGE_COUNT;
+	unsigned long page;
+	void *address;
+
+	if (!count)
+		count = 1;
+	protect &= ~(PAGE_WRITECOMBINE | PAGE_NOCACHE);
+	if (!protect)
+		protect = PAGE_READWRITE;
+
+	pthread_mutex_lock(&arena_lock);
+	if (!arena_reserved)
+	{
+		pthread_mutex_unlock(&arena_lock);
+		return NULL;
+	}
+	if (physical_address != PLATFORM_ANY_PHYSICAL_ADDRESS)
+	{
+		/* an offset into the window, not an address in it */
+		unsigned long wanted = physical_address / PAGE_SIZE_BYTES;
+
+		if (pages_free(wanted, count))
+			first = wanted;
+	}
+	else if (count <= CONTIGUOUS_PAGE_COUNT)
+	{
+		/* top-down first fit, like the Xbox contiguous allocator */
+		unsigned long candidate = CONTIGUOUS_PAGE_COUNT - count;
+
+		for (;;)
+		{
+			candidate -= candidate % alignment_pages;
+			if (pages_free(candidate, count))
+			{
+				first = candidate;
+				break;
+			}
+			if (candidate == 0)
+				break;
+			candidate--;
+		}
+	}
+	if (first == CONTIGUOUS_PAGE_COUNT)
+	{
+		pthread_mutex_unlock(&arena_lock);
+		return NULL;
+	}
+
+	address = (void *)(PLATFORM_CONTIGUOUS_BASE + first * PAGE_SIZE_BYTES);
+	memory_watch_forget(address, count * PAGE_SIZE_BYTES);
+#ifdef HALO_WEB
+	memset(address, 0, count * PAGE_SIZE_BYTES);
+#else
+	/* map fresh zeroed pages over the reservation */
+	if (mmap(address, count * PAGE_SIZE_BYTES, protection_to_host(protect),
+		MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0) != address)
+	{
+		pthread_mutex_unlock(&arena_lock);
+		return NULL;
+	}
+#endif
+	for (page = first; page < first + count; page++)
+		page_protection[page] = protect;
+	block_page_count[first] = count;
+	pthread_mutex_unlock(&arena_lock);
+	return address;
+}
+
+/* the length of the block address is the start of, or 0 */
+unsigned long platform_contiguous_block_size(const void *address)
+{
+	unsigned long first, count = 0;
+
+	if (!platform_is_contiguous(address))
+		return 0;
+	first = ((unsigned long)address - PLATFORM_CONTIGUOUS_BASE) / PAGE_SIZE_BYTES;
+	pthread_mutex_lock(&arena_lock);
+	count = block_page_count[first];
+	pthread_mutex_unlock(&arena_lock);
+	return count * PAGE_SIZE_BYTES;
+}
+
+void platform_contiguous_free(void *address)
+{
+	unsigned long first, count, page;
+
+	if (!platform_is_contiguous(address))
+		return;
+	first = ((unsigned long)address - PLATFORM_CONTIGUOUS_BASE) / PAGE_SIZE_BYTES;
+	pthread_mutex_lock(&arena_lock);
+	count = block_page_count[first];
+	if (count)
+	{
+		memory_watch_forget(address, count * PAGE_SIZE_BYTES);
+#ifndef HALO_WEB
+		mmap(address, count * PAGE_SIZE_BYTES, PROT_NONE,
+			MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE | MAP_FIXED, -1, 0);
+#endif
+		for (page = first; page < first + count; page++)
+			page_protection[page] = 0;
+		block_page_count[first] = 0;
+	}
+	pthread_mutex_unlock(&arena_lock);
+}
+
+/* ---------- XAPI */
+
+LPVOID WINAPI XPhysicalAlloc(SIZE_T size, ULONG_PTR physical_address, ULONG_PTR alignment, DWORD protect)
+{
+	/* A highest-acceptable address inside the window places the block
+	there, which is how the game gets its fixed game state and tag cache
+	addresses; anything else may go anywhere. */
+	void *result = platform_contiguous_alloc(size, alignment,
+		physical_address < PLATFORM_CONTIGUOUS_SIZE ? physical_address : PLATFORM_ANY_PHYSICAL_ADDRESS,
+		protect);
+
+	if (!result)
+	{
+		platform_log("XPhysicalAlloc: cannot allocate %lu bytes (physical address 0x%08lx)",
+			(unsigned long)size, (unsigned long)physical_address);
+		SetLastError(ERROR_NOT_ENOUGH_MEMORY);
+	}
+	return result;
+}
+
+VOID WINAPI XPhysicalFree(LPVOID address)
+{
+	platform_contiguous_free(address);
+}
+
+BOOL WINAPI VirtualProtect(LPVOID address, SIZE_T size, DWORD new_protect, PDWORD old_protect)
+{
+	unsigned long start = (unsigned long)address & ~(PAGE_SIZE_BYTES - 1);
+	unsigned long end = ((unsigned long)address + size + PAGE_SIZE_BYTES - 1) & ~(PAGE_SIZE_BYTES - 1);
+
+	if (old_protect)
+		*old_protect = platform_is_contiguous(address) ?
+			page_protection[(start - PLATFORM_CONTIGUOUS_BASE) / PAGE_SIZE_BYTES] : PAGE_READWRITE;
+	memory_watch_forget((void *)start, end - start);
+#ifndef HALO_WEB
+	if (mprotect((void *)start, end - start, protection_to_host(new_protect)) != 0)
+	{
+		platform_set_last_error_from_errno(errno);
+		return FALSE;
+	}
+#endif
+	if (platform_is_contiguous((void *)start))
+	{
+		unsigned long page;
+
+		pthread_mutex_lock(&arena_lock);
+		for (page = (start - PLATFORM_CONTIGUOUS_BASE) / PAGE_SIZE_BYTES;
+			page < (end - PLATFORM_CONTIGUOUS_BASE) / PAGE_SIZE_BYTES && page < CONTIGUOUS_PAGE_COUNT;
+			page++)
+		{
+			if (page_protection[page])
+				page_protection[page] = new_protect & ~(PAGE_WRITECOMBINE | PAGE_NOCACHE);
+		}
+		pthread_mutex_unlock(&arena_lock);
+	}
+	return TRUE;
+}
+
+VOID WINAPI XPhysicalProtect(LPVOID address, SIZE_T size, DWORD new_protect)
+{
+	VirtualProtect(address, size, new_protect, NULL);
+}
+
+DWORD WINAPI XQueryMemoryProtect(LPVOID address)
+{
+	DWORD protect = PAGE_READWRITE;
+
+	if (platform_is_contiguous(address))
+	{
+		pthread_mutex_lock(&arena_lock);
+		protect = page_protection[((unsigned long)address - PLATFORM_CONTIGUOUS_BASE) / PAGE_SIZE_BYTES];
+		pthread_mutex_unlock(&arena_lock);
+		if (!protect)
+			protect = PAGE_NOACCESS;
+	}
+	return protect;
+}

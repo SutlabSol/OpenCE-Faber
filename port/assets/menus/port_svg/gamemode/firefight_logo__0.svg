@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <filter id="ff_glow" filterUnits="userSpaceOnUse" x="-64" y="-64" width="384" height="384">
+      <feGaussianBlur stdDeviation="5.5"/>
+    </filter>
+    <linearGradient id="ff_card_bg" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="114">
+      <stop offset="0" stop-color="#061728"/>
+      <stop offset="0.55" stop-color="#0a2843"/>
+      <stop offset="1" stop-color="#154d85"/>
+    </linearGradient>
+    <linearGradient id="ff_shield_fill" gradientUnits="userSpaceOnUse" x1="0" y1="-68" x2="0" y2="72">
+      <stop offset="0" stop-color="#0a2649"/>
+      <stop offset="1" stop-color="#050d1c"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(128, 96) scale(1.0)">
+    <!-- Outer cyan glow aura (#2896ff) -->
+    <g filter="url(#ff_glow)" opacity="0.72" fill="#2896ff" stroke="#2896ff" stroke-width="4" stroke-linejoin="round">
+      <g transform="rotate(-42)"><rect x="-82" y="-5.5" width="164" height="11" rx="2"/></g>
+      <g transform="rotate(42)"><rect x="-82" y="-5.5" width="164" height="11" rx="2"/></g>
+      <polygon points="0,-60 46,-36 38,24 0,68 -38,24 -46,-36"/>
+    </g>
+    <!-- Crossed Rifles (black core + #0a2649 glow + #2896ff wireframe) -->
+    <g transform="rotate(-42)">
+      <path d="M-84,-6 L-54,-9 L-48,-5 L46,-5 L64,-8 L82,-3 L82,4 L56,5 L46,9 L18,9 L12,5 L-46,5 L-56,11 L-84,8 Z" fill="#000000" stroke="#2896ff" stroke-width="2" stroke-linejoin="round"/>
+      <line x1="-44" y1="-1" x2="54" y2="-1" stroke="#2896ff" stroke-width="1.2" stroke-opacity="0.8"/>
+    </g>
+    <g transform="rotate(42)">
+      <path d="M-84,-6 L-54,-9 L-48,-5 L46,-5 L64,-8 L82,-3 L82,4 L56,5 L46,9 L18,9 L12,5 L-46,5 L-56,11 L-84,8 Z" fill="#000000" stroke="#2896ff" stroke-width="2" stroke-linejoin="round"/>
+      <line x1="-44" y1="-1" x2="54" y2="-1" stroke="#2896ff" stroke-width="1.2" stroke-opacity="0.8"/>
+    </g>
+    <!-- Outer Shield Crest -->
+    <polygon points="0,-60 46,-36 38,24 0,68 -38,24 -46,-36" fill="#000000" stroke="#2896ff" stroke-width="2.4" stroke-linejoin="round"/>
+    <polygon points="0,-53 39,-32 32,20 0,58 -32,20 -39,-32" fill="url(#ff_shield_fill)" stroke="#2896ff" stroke-width="1.4" stroke-linejoin="round"/>
+    <!-- Horizontal Scanlines inside Shield -->
+    <g stroke="#2896ff" stroke-width="0.9" stroke-opacity="0.32">
+      <line x1="-34" y1="-28" x2="34" y2="-28"/>
+      <line x1="-35" y1="-20" x2="35" y2="-20"/>
+      <line x1="-34" y1="-12" x2="34" y2="-12"/>
+      <line x1="-33" y1="-4" x2="33" y2="-4"/>
+      <line x1="-31" y1="4" x2="31" y2="4"/>
+      <line x1="-29" y1="12" x2="29" y2="12"/>
+      <line x1="-25" y1="20" x2="25" y2="20"/>
+    </g>
+    <!-- Inner ODST / Spartan Helmet & Skull Visor -->
+    <polygon points="0,-42 26,-27 28,2 17,22 13,38 -13,38 -17,22 -28,2 -26,-27" fill="#000000" stroke="#2896ff" stroke-width="2" stroke-linejoin="round"/>
+    <polygon points="0,-16 22,-19 18,-3 4,-2 0,-7 -4,-2 -18,-3 -22,-19" fill="#0a2649" stroke="#2896ff" stroke-width="1.8" stroke-linejoin="round"/>
+    <polygon points="0,0 5,11 -5,11" fill="#0a2649" stroke="#2896ff" stroke-width="1.4" stroke-linejoin="round"/>
+    <!-- Skull Jaw / Visor Grill -->
+    <line x1="-8" y1="18" x2="-8" y2="35" stroke="#2896ff" stroke-width="1.6"/>
+    <line x1="-2.7" y1="18" x2="-2.7" y2="36" stroke="#2896ff" stroke-width="1.6"/>
+    <line x1="2.7" y1="18" x2="2.7" y2="36" stroke="#2896ff" stroke-width="1.6"/>
+    <line x1="8" y1="18" x2="8" y2="35" stroke="#2896ff" stroke-width="1.6"/>
+    <!-- 5 Wave Stars Arc Above Crest -->
+    <g fill="#0a2649" stroke="#2896ff" stroke-width="1.3" stroke-linejoin="round">
+      <polygon transform="translate(-38,-62) scale(0.62)" points="0,-9 2.6,-2.8 9.2,-2.2 4.1,2.2 5.7,8.8 0,5.2 -5.7,8.8 -4.1,2.2 -9.2,-2.2 -2.6,-2.8"/>
+      <polygon transform="translate(-19,-70) scale(0.68)" points="0,-9 2.6,-2.8 9.2,-2.2 4.1,2.2 5.7,8.8 0,5.2 -5.7,8.8 -4.1,2.2 -9.2,-2.2 -2.6,-2.8"/>
+      <polygon transform="translate(0,-74) scale(0.78)" points="0,-9 2.6,-2.8 9.2,-2.2 4.1,2.2 5.7,8.8 0,5.2 -5.7,8.8 -4.1,2.2 -9.2,-2.2 -2.6,-2.8"/>
+      <polygon transform="translate(19,-70) scale(0.68)" points="0,-9 2.6,-2.8 9.2,-2.2 4.1,2.2 5.7,8.8 0,5.2 -5.7,8.8 -4.1,2.2 -9.2,-2.2 -2.6,-2.8"/>
+      <polygon transform="translate(38,-62) scale(0.62)" points="0,-9 2.6,-2.8 9.2,-2.2 4.1,2.2 5.7,8.8 0,5.2 -5.7,8.8 -4.1,2.2 -9.2,-2.2 -2.6,-2.8"/>
+    </g>
+  </g>
+</svg>

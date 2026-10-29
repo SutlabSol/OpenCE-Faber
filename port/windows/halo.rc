@@ -1,0 +1,28 @@
+/* OpenCE : Genesis ("OpenCE - Genesis.exe") resources (tools/windows_build.py):
+its icon (tools/app_icon.py), which Explorer and the taskbar show and SDL's
+windows take, as the first icon of the executable */
+1 ICON "opence-icon.ico"
+
+1 VERSIONINFO
+FILEVERSION 1,0,0,0
+PRODUCTVERSION 1,0,0,0
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904E4"
+        BEGIN
+            VALUE "CompanyName", "OpenCE : Genesis"
+            VALUE "FileDescription", "OpenCE : Genesis"
+            VALUE "FileVersion", "1.0.0.0"
+            VALUE "InternalName", "OpenCE : Genesis"
+            VALUE "OriginalFilename", "OpenCE - Genesis.exe"
+            VALUE "ProductName", "OpenCE : Genesis"
+            VALUE "ProductVersion", "1.0.0.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 1252
+    END
+END
+

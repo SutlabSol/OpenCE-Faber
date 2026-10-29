@@ -1,0 +1,858 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The PC version's menus: ui\shell\main_menu\multiplayer_type_select (tools/ce_menus.py) -->
+<menus>
+	<widget name="main_menu/multiplayer_type_select/header_multiplayer" controller="1" left="35" top="11" width="605" height="59" bitmap="main_menu/multiplayer_type_select/header_multiplayer">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/multiplayer_options_pic" controller="1" left="288" top="82" width="307" height="244" bitmap="main_menu/multiplayer_type_select/mp_options">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/multiplayer_options_txt" type="text" controller="1" left="290" top="285" width="290" height="105" string_list="main_menu/multiplayer_type_select/multiplayer_option_descriptions" font="ui\large_ui" color="#FF2896FF">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/multiplayer_button_service_record" type="text" width="128" height="24" bitmap="bitmaps/text_button_background" text="SERVICE RECORD" font="ui\small_ui" color="#FFFFFFFF" align="center" text_y="2">
+		<on event="a" open="main_menu/multiplayer_type_select/service_record/service_record_screen"/>
+		<on event="start" open="main_menu/multiplayer_type_select/service_record/service_record_screen"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/multiplayer_type_button_bar" type="column_list" width="640" height="28" flags="pass_unhandled_to_focused_child left_right_tabs_items">
+		<data input="common button bar update"/>
+		<child widget="main_menu/multiplayer_type_select/multiplayer_button_service_record" x="2" y="1"/>
+		<child widget="common_button_back" x="510" y="1"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/multiplayer_type_create_internet_item" type="text" left="51" width="232" height="32" bitmap="bitmaps/list_item_bkd" string_list="main_menu/multiplayer_type_select/multiplayer_options" string_index="2" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="5">
+		<on event="a" run="join controller to mp game"/>
+		<on event="a" run="mp type set mode" open="main_menu/multiplayer_type_select/connected/connected_map_select_wrapper"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/multiplayer_type_create_item" type="text" left="51" width="232" height="32" string_list="main_menu/multiplayer_type_select/multiplayer_options" string_index="1" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="5">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/multiplayer_type_create_lan_item" type="text" left="51" width="232" height="32" bitmap="bitmaps/list_item_bkd" string_list="main_menu/multiplayer_type_select/multiplayer_options" string_index="3" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="5">
+		<on event="a" run="join controller to mp game"/>
+		<on event="a" run="mp type set mode" open="main_menu/multiplayer_type_select/connected/connected_map_select_wrapper"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/multiplayer_type_gametypes_item" type="text" left="51" width="232" height="32" bitmap="bitmaps/list_item_bkd" string_list="main_menu/multiplayer_type_select/multiplayer_options" string_index="5" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="5">
+		<on event="a" open="main_menu/settings_select/multiplayer_setup/playlist_select/gametype_select_screen"/>
+		<on event="start" open="main_menu/settings_select/multiplayer_setup/playlist_select/gametype_select_screen"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/multiplayer_type_join_direct_item" type="text" left="51" width="232" height="32" bitmap="bitmaps/list_item_bkd" string_list="main_menu/multiplayer_type_select/multiplayer_options" string_index="4" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="5">
+		<on event="a" run="mp type set mode" open="main_menu/multiplayer_type_select/join_game/join_game_screen"/>
+		<on event="start" run="mp type set mode" open="main_menu/multiplayer_type_select/join_game/join_game_screen"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/multiplayer_type_join_internet_item" type="text" left="51" width="232" height="32" bitmap="bitmaps/list_item_bkd" string_list="main_menu/multiplayer_type_select/multiplayer_options" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="5" string_index="6">
+		<on event="a" run="mp type set mode" open="main_menu/multiplayer_type_select/join_game/join_game_screen"/>
+		<on event="start" run="mp type set mode" open="main_menu/multiplayer_type_select/join_game/join_game_screen"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/multiplayer_type_join_item" type="text" left="51" width="232" height="32" string_list="main_menu/multiplayer_type_select/multiplayer_options" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="5">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/multiplayer_type_join_lan_item" type="text" left="51" width="232" height="32" bitmap="bitmaps/list_item_bkd" string_list="main_menu/multiplayer_type_select/multiplayer_options" string_index="3" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="5">
+		<on event="a" run="mp type set mode" open="main_menu/multiplayer_type_select/join_game/join_game_screen"/>
+		<on event="start" run="mp type set mode" open="main_menu/multiplayer_type_select/join_game/join_game_screen"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/multiplayer_type_list_ext_desc" controller="1" left="275" top="78" width="320" height="322" bitmap="bitmaps/list_field" color="#FF0080FF">
+		<child widget="main_menu/multiplayer_type_select/multiplayer_options_pic"/>
+		<child widget="main_menu/multiplayer_type_select/multiplayer_options_txt" y="37"/>
+		<child widget="main_menu/current_profile_name"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/multiplayer_type_select_list" type="column_list" width="640" height="480" flags="pass_unhandled_to_focused_child up_down_tabs_items" description="main_menu/multiplayer_type_select/multiplayer_type_list_ext_desc">
+		<data input="multiplayer type menu update desc"/>
+		<data input="mp type screen update"/>
+		<child widget="main_menu/multiplayer_type_select/multiplayer_type_join_item" x="-32" y="78"/>
+		<child widget="main_menu/multiplayer_type_select/multiplayer_type_join_internet_item" y="107"/>
+		<child widget="main_menu/multiplayer_type_select/multiplayer_type_join_lan_item" y="136"/>
+		<child widget="main_menu/multiplayer_type_select/multiplayer_type_join_direct_item" y="165"/>
+		<child widget="main_menu/multiplayer_type_select/multiplayer_type_create_item" x="-32" y="194"/>
+		<child widget="main_menu/multiplayer_type_select/multiplayer_type_create_internet_item" y="223"/>
+		<child widget="main_menu/multiplayer_type_select/multiplayer_type_create_lan_item" y="252"/>
+		<child widget="main_menu/multiplayer_type_select/multiplayer_type_create_local_item" y="281"/>
+		<child widget="main_menu/multiplayer_type_select/multiplayer_type_coop_item" y="310"/>
+		<child widget="main_menu/multiplayer_type_select/multiplayer_type_gametypes_item" y="358"/>
+		<child widget="main_menu/multiplayer_type_select/multiplayer_type_button_bar" y="414"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/multiplayer_type_select_screen" width="640" height="480" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/gradient">
+		<on event="created" run="mp type menu initialize"/>
+		<child widget="main_menu/multiplayer_type_select/header_multiplayer"/>
+		<child widget="main_menu/multiplayer_type_select/header_standard"/>
+		<child widget="main_menu/multiplayer_type_select/header_ranked"/>
+		<child widget="main_menu/multiplayer_type_select/header_firefight"/>
+		<child widget="main_menu/multiplayer_type_select/header_forge"/>
+		<child widget="main_menu/multiplayer_type_select/multiplayer_type_select_list"/>
+		<child widget="main_menu/blueline" x="64" y="349"/>
+	</widget>
+	<!-- GAMEMODE & SERVICE RECORD SCREENS -->
+	<widget name="main_menu/multiplayer_type_select/header_standard" controller="1" left="35" top="11" width="363" height="59" bitmap="main_menu/multiplayer_type_select/header_standard">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/header_ranked" controller="1" left="35" top="11" width="363" height="59" bitmap="main_menu/multiplayer_type_select/header_ranked">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/header_firefight" controller="1" left="35" top="11" width="363" height="59" bitmap="main_menu/multiplayer_type_select/header_firefight">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/header_forge" controller="1" left="35" top="11" width="363" height="59" bitmap="main_menu/multiplayer_type_select/header_forge">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/header_theater" controller="1" left="35" top="11" width="363" height="59" bitmap="main_menu/multiplayer_type_select/header_theater">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/header_creation_hub" controller="1" left="35" top="11" width="363" height="59" bitmap="main_menu/multiplayer_type_select/header_creation_hub">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/header_dedi_server" controller="1" left="35" top="11" width="363" height="59" bitmap="main_menu/multiplayer_type_select/header_dedi_server">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/gamemode/header_gamemode" controller="1" left="35" top="11" width="363" height="59" bitmap="main_menu/multiplayer_type_select/gamemode/header_gamemode">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/gamemode/gamemode_options_pic" controller="1" left="307" top="90" width="256" height="250" bitmap="main_menu/multiplayer_type_select/gamemode/gamemode_options">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/gamemode/gamemode_options_txt" type="text" controller="1" left="290" top="285" width="290" height="105" font="ui\large_ui" color="#FF2896FF">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/gamemode/gamemode_ext_desc" controller="1" left="275" top="78" width="320" height="322" bitmap="bitmaps/list_field" color="#FF0080FF">
+		<child widget="main_menu/multiplayer_type_select/gamemode/gamemode_options_pic"/>
+		<child widget="main_menu/multiplayer_type_select/gamemode/gamemode_options_txt"/>
+		<child widget="main_menu/current_profile_name"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/gamemode/gm_standard_item" type="text" left="51" width="232" height="32" bitmap="bitmaps/list_item_bkd_top" text="STANDARD" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="5">
+		<on event="a" run="gamemode select standard" open="main_menu/multiplayer_type_select/multiplayer_type_select_screen"/>
+		<on event="start" run="gamemode select standard" open="main_menu/multiplayer_type_select/multiplayer_type_select_screen"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/gamemode/gm_ranked_item" type="text" left="51" width="232" height="32" bitmap="bitmaps/list_item_bkd" text="RANKED" font="ui\large_ui" color="#FF556677" text_x="13" text_y="5">
+		<on event="a" run="gamemode select ranked" open="main_menu/multiplayer_type_select/multiplayer_type_select_screen"/>
+		<on event="start" run="gamemode select ranked" open="main_menu/multiplayer_type_select/multiplayer_type_select_screen"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/gamemode/gm_firefight_item" type="text" left="51" width="232" height="32" bitmap="bitmaps/list_item_bkd" text="FIREFIGHT" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="5">
+		<on event="a" run="gamemode select firefight" open="main_menu/multiplayer_type_select/multiplayer_type_select_screen"/>
+		<on event="start" run="gamemode select firefight" open="main_menu/multiplayer_type_select/multiplayer_type_select_screen"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/gamemode/gm_forge_item" type="text" left="51" width="232" height="32" bitmap="bitmaps/list_item_bkd" text="FORGE" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="5">
+		<on event="a" run="gamemode select forge" open="main_menu/forge_select/forge_menu"/>
+		<on event="start" run="gamemode select forge" open="main_menu/forge_select/forge_menu"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/gamemode/gm_theater_item" type="text" left="51" width="232" height="32" bitmap="bitmaps/list_item_bkd" text="THEATER" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="5">
+		<on event="a" run="gamemode select theater" open="main_menu/multiplayer_type_select/theater/theater_screen"/>
+		<on event="start" run="gamemode select theater" open="main_menu/multiplayer_type_select/theater/theater_screen"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/gamemode/gm_creation_hub_item" type="text" left="51" width="232" height="32" bitmap="bitmaps/list_item_bkd" text="CREATION HUB" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="5">
+		<on event="a" run="gamemode select creation hub" open="main_menu/multiplayer_type_select/creation_hub/creation_hub_screen"/>
+		<on event="start" run="gamemode select creation hub" open="main_menu/multiplayer_type_select/creation_hub/creation_hub_screen"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/gamemode/gm_dedi_server_item" type="text" left="51" width="232" height="32" bitmap="bitmaps/list_item_bkd" text="DEDICATED SERVER" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="5">
+		<on event="a" run="gamemode select dedi server" open="main_menu/multiplayer_type_select/dedi_server/dedi_server_screen"/>
+		<on event="start" run="gamemode select dedi server" open="main_menu/multiplayer_type_select/dedi_server/dedi_server_screen"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/gamemode/gamemode_button_bar" type="column_list" width="640" height="28" flags="pass_unhandled_to_focused_child left_right_tabs_items">
+		<data input="common button bar update"/>
+		<child widget="main_menu/multiplayer_type_select/multiplayer_button_service_record" x="2" y="1"/>
+		<child widget="common_button_back" x="510" y="1"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/gamemode/gamemode_select_list" type="column_list" width="640" height="480" flags="pass_unhandled_to_focused_child up_down_tabs_items" description="main_menu/multiplayer_type_select/gamemode/gamemode_ext_desc">
+		<data input="gamemode menu update"/>
+		<on event="created" run="gamemode menu init"/>
+		<child widget="main_menu/multiplayer_type_select/gamemode/gm_standard_item" y="78"/>
+		<child widget="main_menu/multiplayer_type_select/gamemode/gm_ranked_item" y="111"/>
+		<child widget="main_menu/multiplayer_type_select/gamemode/gm_firefight_item" y="144"/>
+		<child widget="main_menu/multiplayer_type_select/gamemode/gm_forge_item" y="177"/>
+		<child widget="main_menu/multiplayer_type_select/gamemode/gm_theater_item" y="210"/>
+		<child widget="main_menu/multiplayer_type_select/gamemode/gm_creation_hub_item" y="243"/>
+		<child widget="main_menu/multiplayer_type_select/gamemode/gm_dedi_server_item" y="276"/>
+		<child widget="main_menu/multiplayer_type_select/gamemode/gamemode_button_bar" y="414"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/gamemode/gamemode_select_screen" width="640" height="480" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/gradient">
+		<on event="b" back="true"/>
+		<on event="back" back="true"/>
+		<child widget="main_menu/multiplayer_type_select/gamemode/header_gamemode"/>
+		<child widget="main_menu/multiplayer_type_select/gamemode/gamemode_select_list"/>
+		<child widget="main_menu/blueline" x="64" y="349"/>
+	</widget>
+	<widget name="main_menu/forge_select/forge_item_single_player" type="text" left="51" width="232" height="32" bitmap="bitmaps/list_item_bkd_top" text="SINGLE PLAYER" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="5">
+		<on event="a" open="main_menu/solo_level_select/solo_level_select_screen"/>
+		<on event="start" open="main_menu/solo_level_select/solo_level_select_screen"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/forge_select/forge_item_multiplayer" type="text" left="51" width="232" height="32" bitmap="bitmaps/list_item_bkd" text="MULTIPLAYER" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="5">
+		<on event="a" open="main_menu/forge_select/forge_mp_type_select_screen"/>
+		<on event="start" open="main_menu/forge_select/forge_mp_type_select_screen"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/forge_select/forge_item_edit_maps" type="text" left="51" width="232" height="32" bitmap="bitmaps/list_item_bkd" text="EDIT MAPS" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="5">
+		<on event="a" open="main_menu/forge_select/forge_edit_maps_screen"/>
+		<on event="start" open="main_menu/forge_select/forge_edit_maps_screen"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/forge_select/forge_item_tag_options" type="text" left="51" width="232" height="32" bitmap="bitmaps/list_item_bkd" text="TAG OPTIONS" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="5">
+		<on event="a" open="main_menu/forge_select/forge_tag_options_menu"/>
+		<on event="start" open="main_menu/forge_select/forge_tag_options_menu"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/forge_select/forge_menu_select_list" type="column_list" width="640" height="480" flags="pass_unhandled_to_focused_child up_down_tabs_items" description="main_menu/multiplayer_type_select/gamemode/gamemode_ext_desc">
+		<data input="gamemode menu update"/>
+		<on event="created" run="gamemode menu init"/>
+		<child widget="main_menu/forge_select/forge_item_single_player" y="78"/>
+		<child widget="main_menu/forge_select/forge_item_multiplayer" y="111"/>
+		<child widget="main_menu/forge_select/forge_item_edit_maps" y="144"/>
+		<child widget="main_menu/forge_select/forge_item_tag_options" y="177"/>
+		<child widget="main_menu/multiplayer_type_select/gamemode/gamemode_button_bar" y="414"/>
+	</widget>
+	<widget name="main_menu/forge_select/forge_menu" width="640" height="480" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/gradient">
+		<on event="b" back="true"/>
+		<on event="back" back="true"/>
+		<child widget="main_menu/multiplayer_type_select/header_forge"/>
+		<child widget="main_menu/forge_select/forge_menu_select_list"/>
+		<child widget="main_menu/blueline" x="64" y="349"/>
+	</widget>
+	<widget name="main_menu/forge_select/forge_item_inject_tags" type="text" left="51" width="232" height="32" bitmap="bitmaps/list_item_bkd_top" text="SYNC CUSTOM TAGS" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="5">
+		<on event="a" run="port mods save"/>
+		<on event="start" run="port mods save"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/forge_select/clear_custom_cache_profile_item" type="text" left="51" width="232" height="32" bitmap="bitmaps/list_item_bkd" text="CLEAR CUSTOM TAGS" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="5">
+		<on event="a" run="port mods close"/>
+		<on event="start" run="port mods close"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/forge_select/reset_tag_cache_profile_item" type="text" left="51" width="232" height="32" bitmap="bitmaps/list_item_bkd" text="RESET TAG CACHE" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="5">
+		<on event="a" run="port mods close"/>
+		<on event="start" run="port mods close"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/forge_select/forge_tag_options_select_list" type="column_list" width="640" height="480" flags="pass_unhandled_to_focused_child up_down_tabs_items" description="main_menu/multiplayer_type_select/gamemode/gamemode_ext_desc">
+		<data input="gamemode menu update"/>
+		<on event="created" run="gamemode menu init"/>
+		<child widget="main_menu/forge_select/forge_item_inject_tags" y="78"/>
+		<child widget="main_menu/forge_select/clear_custom_cache_profile_item" y="111"/>
+		<child widget="main_menu/forge_select/reset_tag_cache_profile_item" y="144"/>
+		<child widget="main_menu/multiplayer_type_select/gamemode/gamemode_button_bar" y="414"/>
+	</widget>
+	<widget name="main_menu/forge_select/forge_tag_options_menu" width="640" height="480" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/gradient">
+		<on event="b" back="true"/>
+		<on event="back" back="true"/>
+		<child widget="main_menu/multiplayer_type_select/header_forge"/>
+		<child widget="main_menu/forge_select/forge_tag_options_select_list"/>
+		<child widget="main_menu/blueline" x="64" y="349"/>
+	</widget>
+	<widget name="main_menu/forge_select/forge_type_edit_maps_item" type="text" left="51" width="232" height="32" bitmap="bitmaps/list_item_bkd" text="EDIT MAPS" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="5">
+		<on event="a" open="main_menu/forge_select/forge_edit_maps_screen"/>
+		<on event="start" open="main_menu/forge_select/forge_edit_maps_screen"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/forge_select/forge_mp_type_select_list" type="column_list" width="640" height="480" flags="pass_unhandled_to_focused_child up_down_tabs_items" description="main_menu/multiplayer_type_select/multiplayer_type_list_ext_desc">
+		<data input="multiplayer type menu update desc"/>
+		<data input="mp type screen update"/>
+		<child widget="main_menu/multiplayer_type_select/multiplayer_type_join_item" x="-32" y="78"/>
+		<child widget="main_menu/multiplayer_type_select/multiplayer_type_join_internet_item" y="107"/>
+		<child widget="main_menu/multiplayer_type_select/multiplayer_type_join_lan_item" y="136"/>
+		<child widget="main_menu/multiplayer_type_select/multiplayer_type_join_direct_item" y="165"/>
+		<child widget="main_menu/multiplayer_type_select/multiplayer_type_create_item" x="-32" y="194"/>
+		<child widget="main_menu/multiplayer_type_select/multiplayer_type_create_internet_item" y="223"/>
+		<child widget="main_menu/multiplayer_type_select/multiplayer_type_create_lan_item" y="252"/>
+		<child widget="main_menu/multiplayer_type_select/multiplayer_type_create_local_item" y="281"/>
+		<child widget="main_menu/forge_select/forge_type_edit_maps_item" y="358"/>
+		<child widget="main_menu/multiplayer_type_select/multiplayer_type_button_bar" y="414"/>
+	</widget>
+	<widget name="main_menu/forge_select/forge_mp_type_select_screen" width="640" height="480" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/gradient">
+		<on event="created" run="mp type menu initialize"/>
+		<on event="b" back="true"/>
+		<on event="back" back="true"/>
+		<child widget="main_menu/multiplayer_type_select/header_forge"/>
+		<child widget="main_menu/forge_select/forge_mp_type_select_list"/>
+		<child widget="main_menu/blueline" x="64" y="349"/>
+	</widget>
+	<widget name="main_menu/forge_select/edit_maps_kind_spinner" type="spinner" width="238" height="22" flags="left_right_tabs_items" strings="USER CREATED|DOWNLOADED" font="ui\large_ui" color="#FF2896FF" align="center" text_y="1" header_bitmap="bitmaps/arrow_sm_left" footer_bitmap="bitmaps/arrow_sm_right" header_bounds="7 -6 19 0" footer_bounds="7 238 19 244">
+		<on event="left_mouse" run="mouse spinner 1wide click"/>
+	</widget>
+	<widget name="main_menu/forge_select/edit_maps_kind_row" width="256" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds_sm" font="ui\large_ui" color="#FF2896FF" align="center" text_y="3">
+		<child widget="main_menu/forge_select/edit_maps_kind_spinner" x="9" y="2"/>
+	</widget>
+	<widget name="main_menu/forge_select/forge_edit_maps_list" type="column_list" width="640" height="480" flags="pass_unhandled_to_focused_child up_down_tabs_children" description="main_menu/solo_level_select/solo_level_extended_desc">
+		<data input="load game list update"/>
+		<on event="created" run="load game menu init"/>
+		<on event="custom_activation" run="load game menu activated"/>
+		<on event="b" back="true"/>
+		<on event="back" back="true"/>
+		<child widget="main_menu/forge_select/edit_maps_kind_row" x="82" y="73"/>
+		<child widget="main_menu/new_select/list_item_1" x="20" y="103"/>
+		<child widget="main_menu/new_select/list_item_2" x="20" y="133"/>
+		<child widget="main_menu/new_select/list_item_3" x="20" y="163"/>
+		<child widget="main_menu/new_select/list_item_4" x="20" y="193"/>
+		<child widget="main_menu/new_select/list_item_5" x="20" y="223"/>
+		<child widget="main_menu/new_select/list_item_6" x="20" y="253"/>
+		<child widget="main_menu/new_select/list_item_7" x="20" y="283"/>
+		<child widget="main_menu/new_select/list_item_8" x="20" y="313"/>
+		<child widget="main_menu/new_select/list_item_9" x="20" y="343"/>
+		<child widget="main_menu/new_select/list_item_10" x="20" y="373"/>
+		<child widget="main_menu/solo_level_select/solo_level_select_button_bar" y="414"/>
+	</widget>
+	<widget name="main_menu/forge_select/forge_edit_maps_screen" width="640" height="480" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/gradient">
+		<on event="b" back="true"/>
+		<on event="back" back="true"/>
+		<child widget="main_menu/new_select/sel_list_desc_bkd"/>
+		<child widget="main_menu/forge_select/forge_edit_maps_list"/>
+		<child widget="main_menu/multiplayer_type_select/header_forge"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/theater/op_theater_1" width="390" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/sel_list_item_bkd_top" color="#FF2896FF">
+		<on event="a" run="port theater watch"/>
+		<on event="start" run="port theater watch"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/multiplayer_type_select/theater/theater_name" x="10"/>
+		<child widget="main_menu/multiplayer_type_select/theater/theater_date" x="280"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/theater/op_theater_2" width="390" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/sel_list_item_bkd" color="#FF2896FF">
+		<on event="a" run="port theater watch"/>
+		<on event="start" run="port theater watch"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/multiplayer_type_select/theater/theater_name" x="10"/>
+		<child widget="main_menu/multiplayer_type_select/theater/theater_date" x="280"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/theater/op_theater_3" width="390" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/sel_list_item_bkd" color="#FF2896FF">
+		<on event="a" run="port theater watch"/>
+		<on event="start" run="port theater watch"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/multiplayer_type_select/theater/theater_name" x="10"/>
+		<child widget="main_menu/multiplayer_type_select/theater/theater_date" x="280"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/theater/op_theater_4" width="390" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/sel_list_item_bkd" color="#FF2896FF">
+		<on event="a" run="port theater watch"/>
+		<on event="start" run="port theater watch"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/multiplayer_type_select/theater/theater_name" x="10"/>
+		<child widget="main_menu/multiplayer_type_select/theater/theater_date" x="280"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/theater/op_theater_5" width="390" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/sel_list_item_bkd" color="#FF2896FF">
+		<on event="a" run="port theater watch"/>
+		<on event="start" run="port theater watch"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/multiplayer_type_select/theater/theater_name" x="10"/>
+		<child widget="main_menu/multiplayer_type_select/theater/theater_date" x="280"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/theater/op_theater_6" width="390" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/sel_list_item_bkd" color="#FF2896FF">
+		<on event="a" run="port theater watch"/>
+		<on event="start" run="port theater watch"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/multiplayer_type_select/theater/theater_name" x="10"/>
+		<child widget="main_menu/multiplayer_type_select/theater/theater_date" x="280"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/theater/op_theater_7" width="390" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/sel_list_item_bkd" color="#FF2896FF">
+		<on event="a" run="port theater watch"/>
+		<on event="start" run="port theater watch"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/multiplayer_type_select/theater/theater_name" x="10"/>
+		<child widget="main_menu/multiplayer_type_select/theater/theater_date" x="280"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/theater/op_theater_8" width="390" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/sel_list_item_bkd" color="#FF2896FF">
+		<on event="a" run="port theater watch"/>
+		<on event="start" run="port theater watch"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/multiplayer_type_select/theater/theater_name" x="10"/>
+		<child widget="main_menu/multiplayer_type_select/theater/theater_date" x="280"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/theater/op_theater_9" width="390" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/sel_list_item_bkd" color="#FF2896FF">
+		<on event="a" run="port theater watch"/>
+		<on event="start" run="port theater watch"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/multiplayer_type_select/theater/theater_name" x="10"/>
+		<child widget="main_menu/multiplayer_type_select/theater/theater_date" x="280"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/theater/op_theater_10" width="390" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/sel_list_item_bkd" color="#FF2896FF">
+		<on event="a" run="port theater watch"/>
+		<on event="start" run="port theater watch"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/multiplayer_type_select/theater/theater_name" x="10"/>
+		<child widget="main_menu/multiplayer_type_select/theater/theater_date" x="280"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/theater/op_theater_11" width="390" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/sel_list_item_bkd" color="#FF2896FF">
+		<on event="a" run="port theater watch"/>
+		<on event="start" run="port theater watch"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/multiplayer_type_select/theater/theater_name" x="10"/>
+		<child widget="main_menu/multiplayer_type_select/theater/theater_date" x="280"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/theater/theater_name" type="text" controller="1" width="266" height="22" font="ui\large_ui" color="#FF2896FF" text_y="4">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/theater/theater_date" type="text" controller="1" width="100" height="22" font="ui\small_ui" color="#FF70B7FF" align="right" text_y="6">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/theater/theater_details_name" type="text" controller="1" left="412" top="84" width="200" height="44" font="ui\large_ui" color="#FFFFFFFF">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/theater/theater_details_text" type="text" controller="1" left="412" top="130" width="200" height="272" font="ui\small_ui" color="#FF2896FF">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/theater/theater_details" width="640" height="480">
+		<child widget="main_menu/multiplayer_type_select/theater/theater_details_name"/>
+		<child widget="main_menu/multiplayer_type_select/theater/theater_details_text"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/theater/theater_button_watch" type="text" width="128" height="24" bitmap="bitmaps/text_button_background" text="WATCH FILM" font="ui\small_ui" color="#FFFFFFFF" align="center" text_y="2">
+		<on event="a" run="port theater watch"/>
+		<on event="start" run="port theater watch"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/theater/theater_button_record" type="text" width="128" height="24" bitmap="bitmaps/text_button_background" text="REC: ON" font="ui\small_ui" color="#FFFFFFFF" align="center" text_y="2">
+		<on event="a" run="port theater record"/>
+		<on event="start" run="port theater record"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/theater/theater_button_delete" type="text" width="128" height="24" bitmap="bitmaps/text_button_background" text="DELETE" font="ui\small_ui" color="#FFFFFFFF" align="center" text_y="2">
+		<on event="a" run="port theater delete"/>
+		<on event="start" run="port theater delete"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/theater/theater_button_export" type="text" width="128" height="24" bitmap="bitmaps/text_button_background" text="COPY PATH" font="ui\small_ui" color="#FFFFFFFF" align="center" text_y="2">
+		<on event="a" run="port theater export"/>
+		<on event="start" run="port theater export"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/theater/theater_button_bar" type="column_list" width="640" height="28" flags="pass_unhandled_to_focused_child left_right_tabs_items">
+		<data input="common button bar update"/>
+		<child widget="main_menu/multiplayer_type_select/theater/theater_button_watch" x="2" y="1"/>
+		<child widget="main_menu/multiplayer_type_select/theater/theater_button_record" x="129" y="1"/>
+		<child widget="main_menu/multiplayer_type_select/theater/theater_button_delete" x="256" y="1"/>
+		<child widget="main_menu/multiplayer_type_select/theater/theater_button_export" x="383" y="1"/>
+		<child widget="common_button_back" x="510" y="1"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/theater/theater_select_list" type="column_list" width="640" height="480" flags="pass_unhandled_to_focused_child up_down_tabs_children" description="main_menu/multiplayer_type_select/theater/theater_details">
+		<data input="port theater update"/>
+		<on event="created" run="port theater init"/>
+		<child widget="main_menu/multiplayer_type_select/theater/op_theater_1" x="20" y="73"/>
+		<child widget="main_menu/multiplayer_type_select/theater/op_theater_2" x="20" y="103"/>
+		<child widget="main_menu/multiplayer_type_select/theater/op_theater_3" x="20" y="133"/>
+		<child widget="main_menu/multiplayer_type_select/theater/op_theater_4" x="20" y="163"/>
+		<child widget="main_menu/multiplayer_type_select/theater/op_theater_5" x="20" y="193"/>
+		<child widget="main_menu/multiplayer_type_select/theater/op_theater_6" x="20" y="223"/>
+		<child widget="main_menu/multiplayer_type_select/theater/op_theater_7" x="20" y="253"/>
+		<child widget="main_menu/multiplayer_type_select/theater/op_theater_8" x="20" y="283"/>
+		<child widget="main_menu/multiplayer_type_select/theater/op_theater_9" x="20" y="313"/>
+		<child widget="main_menu/multiplayer_type_select/theater/op_theater_10" x="20" y="343"/>
+		<child widget="main_menu/multiplayer_type_select/theater/op_theater_11" x="20" y="373"/>
+		<child widget="main_menu/multiplayer_type_select/theater/theater_button_bar" y="414"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/theater/theater_screen" width="640" height="480" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/gradient">
+		<on event="b" back="true"/>
+		<on event="back" back="true"/>
+		<child widget="main_menu/new_select/sel_list_desc_bkd"/>
+		<child widget="main_menu/multiplayer_type_select/header_theater"/>
+		<child widget="main_menu/multiplayer_type_select/theater/theater_select_list"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/creation_hub/op_tag_1" width="390" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/sel_list_item_bkd_top" color="#FF2896FF">
+		<on event="a" run="port tags choose"/>
+		<on event="start" run="port tags choose"/>
+		<on event="left" run="port tags left"/>
+		<on event="right" run="port tags right"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/tag_name" x="10"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/tag_state" x="280"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/creation_hub/op_tag_2" width="390" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/sel_list_item_bkd" color="#FF2896FF">
+		<on event="a" run="port tags choose"/>
+		<on event="start" run="port tags choose"/>
+		<on event="left" run="port tags left"/>
+		<on event="right" run="port tags right"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/tag_name" x="10"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/tag_state" x="280"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/creation_hub/op_tag_3" width="390" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/sel_list_item_bkd" color="#FF2896FF">
+		<on event="a" run="port tags choose"/>
+		<on event="start" run="port tags choose"/>
+		<on event="left" run="port tags left"/>
+		<on event="right" run="port tags right"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/tag_name" x="10"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/tag_state" x="280"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/creation_hub/op_tag_4" width="390" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/sel_list_item_bkd" color="#FF2896FF">
+		<on event="a" run="port tags choose"/>
+		<on event="start" run="port tags choose"/>
+		<on event="left" run="port tags left"/>
+		<on event="right" run="port tags right"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/tag_name" x="10"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/tag_state" x="280"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/creation_hub/op_tag_5" width="390" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/sel_list_item_bkd" color="#FF2896FF">
+		<on event="a" run="port tags choose"/>
+		<on event="start" run="port tags choose"/>
+		<on event="left" run="port tags left"/>
+		<on event="right" run="port tags right"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/tag_name" x="10"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/tag_state" x="280"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/creation_hub/op_tag_6" width="390" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/sel_list_item_bkd" color="#FF2896FF">
+		<on event="a" run="port tags choose"/>
+		<on event="start" run="port tags choose"/>
+		<on event="left" run="port tags left"/>
+		<on event="right" run="port tags right"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/tag_name" x="10"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/tag_state" x="280"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/creation_hub/op_tag_7" width="390" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/sel_list_item_bkd" color="#FF2896FF">
+		<on event="a" run="port tags choose"/>
+		<on event="start" run="port tags choose"/>
+		<on event="left" run="port tags left"/>
+		<on event="right" run="port tags right"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/tag_name" x="10"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/tag_state" x="280"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/creation_hub/op_tag_8" width="390" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/sel_list_item_bkd" color="#FF2896FF">
+		<on event="a" run="port tags choose"/>
+		<on event="start" run="port tags choose"/>
+		<on event="left" run="port tags left"/>
+		<on event="right" run="port tags right"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/tag_name" x="10"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/tag_state" x="280"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/creation_hub/op_tag_9" width="390" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/sel_list_item_bkd" color="#FF2896FF">
+		<on event="a" run="port tags choose"/>
+		<on event="start" run="port tags choose"/>
+		<on event="left" run="port tags left"/>
+		<on event="right" run="port tags right"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/tag_name" x="10"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/tag_state" x="280"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/creation_hub/op_tag_10" width="390" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/sel_list_item_bkd" color="#FF2896FF">
+		<on event="a" run="port tags choose"/>
+		<on event="start" run="port tags choose"/>
+		<on event="left" run="port tags left"/>
+		<on event="right" run="port tags right"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/tag_name" x="10"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/tag_state" x="280"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/creation_hub/op_tag_11" width="390" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/sel_list_item_bkd" color="#FF2896FF">
+		<on event="a" run="port tags choose"/>
+		<on event="start" run="port tags choose"/>
+		<on event="left" run="port tags left"/>
+		<on event="right" run="port tags right"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/tag_name" x="10"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/tag_state" x="280"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/creation_hub/tag_name" type="text" controller="1" width="266" height="22" font="ui\large_ui" color="#FF2896FF" text_y="4">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/creation_hub/tag_state" type="text" controller="1" width="100" height="22" font="ui\small_ui" color="#FF70B7FF" align="right" text_y="6">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/creation_hub/tag_details_name" type="text" controller="1" left="412" top="84" width="200" height="44" font="ui\large_ui" color="#FFFFFFFF">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/creation_hub/tag_preview" controller="1" left="440" top="280" width="144" height="102">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/creation_hub/tag_details_text" type="text" controller="1" left="412" top="130" width="200" height="272" font="ui\small_ui" color="#FF2896FF">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/creation_hub/tag_details" width="640" height="480">
+		<child widget="main_menu/multiplayer_type_select/creation_hub/tag_details_name"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/tag_preview"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/tag_details_text"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/creation_hub/tags_button_new" type="text" width="128" height="24" bitmap="bitmaps/text_button_background" text="FIRING RANGE" font="ui\small_ui" color="#FFFFFFFF" align="center" text_y="2">
+		<on event="a" run="port tags new profile"/>
+		<on event="start" run="port tags new profile"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/creation_hub/tags_button_profile" type="text" width="128" height="24" bitmap="bitmaps/text_button_background" text="CREATE MAP" font="ui\small_ui" color="#FFFFFFFF" align="center" text_y="2">
+		<on event="a" run="port tags profile button"/>
+		<on event="start" run="port tags profile button"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/creation_hub/tags_button_back" type="text" width="128" height="24" bitmap="bitmaps/text_button_background" text="BACK" font="ui\small_ui" color="#FFFFFFFF" align="center" text_y="2">
+		<on event="a" run="port tags back"/>
+		<on event="start" run="port tags back"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/creation_hub/tags_button_bar" type="column_list" width="640" height="28" flags="pass_unhandled_to_focused_child left_right_tabs_items">
+		<data input="common button bar update"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/tags_button_new" x="2" y="1"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/tags_button_profile" x="129" y="1"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/tags_button_back" x="510" y="1"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/creation_hub/tags_select_list" type="column_list" width="640" height="480" flags="pass_unhandled_to_focused_child up_down_tabs_children" description="main_menu/multiplayer_type_select/creation_hub/tag_details">
+		<data input="port tags update"/>
+		<on event="created" run="port tags init"/>
+		<on event="deleted" run="port tags close"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/op_tag_1" x="20" y="73"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/op_tag_2" x="20" y="103"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/op_tag_3" x="20" y="133"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/op_tag_4" x="20" y="163"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/op_tag_5" x="20" y="193"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/op_tag_6" x="20" y="223"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/op_tag_7" x="20" y="253"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/op_tag_8" x="20" y="283"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/op_tag_9" x="20" y="313"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/op_tag_10" x="20" y="343"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/op_tag_11" x="20" y="373"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/tags_button_bar" y="414"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/creation_hub/creation_hub_screen" width="640" height="480" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/gradient">
+		<on event="b" run="port tags back"/>
+		<on event="back" run="port tags back"/>
+		<child widget="main_menu/new_select/sel_list_desc_bkd"/>
+		<child widget="main_menu/multiplayer_type_select/header_creation_hub"/>
+		<child widget="main_menu/multiplayer_type_select/creation_hub/tags_select_list"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/dedi_server/op_dedi_1" width="390" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/sel_list_item_bkd_top" color="#FF2896FF">
+		<on event="a" run="dedi server choose"/>
+		<on event="start" run="dedi server choose"/>
+		<on event="left" run="dedi server left"/>
+		<on event="right" run="dedi server right"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/multiplayer_type_select/dedi_server/dedi_name" x="10"/>
+		<child widget="main_menu/multiplayer_type_select/dedi_server/dedi_state" x="230"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/dedi_server/op_dedi_2" width="390" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/sel_list_item_bkd" color="#FF2896FF">
+		<on event="a" run="dedi server choose"/>
+		<on event="start" run="dedi server choose"/>
+		<on event="left" run="dedi server left"/>
+		<on event="right" run="dedi server right"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/multiplayer_type_select/dedi_server/dedi_name" x="10"/>
+		<child widget="main_menu/multiplayer_type_select/dedi_server/dedi_state" x="230"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/dedi_server/op_dedi_3" width="390" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/sel_list_item_bkd" color="#FF2896FF">
+		<on event="a" run="dedi server choose"/>
+		<on event="start" run="dedi server choose"/>
+		<on event="left" run="dedi server left"/>
+		<on event="right" run="dedi server right"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/multiplayer_type_select/dedi_server/dedi_name" x="10"/>
+		<child widget="main_menu/multiplayer_type_select/dedi_server/dedi_state" x="230"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/dedi_server/op_dedi_4" width="390" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/sel_list_item_bkd" color="#FF2896FF">
+		<on event="a" run="dedi server choose"/>
+		<on event="start" run="dedi server choose"/>
+		<on event="left" run="dedi server left"/>
+		<on event="right" run="dedi server right"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/multiplayer_type_select/dedi_server/dedi_name" x="10"/>
+		<child widget="main_menu/multiplayer_type_select/dedi_server/dedi_state" x="230"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/dedi_server/op_dedi_5" width="390" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/sel_list_item_bkd" color="#FF2896FF">
+		<on event="a" run="dedi server choose"/>
+		<on event="start" run="dedi server choose"/>
+		<on event="left" run="dedi server left"/>
+		<on event="right" run="dedi server right"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/multiplayer_type_select/dedi_server/dedi_name" x="10"/>
+		<child widget="main_menu/multiplayer_type_select/dedi_server/dedi_state" x="230"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/dedi_server/op_dedi_6" width="390" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/sel_list_item_bkd" color="#FF2896FF">
+		<on event="a" run="dedi server choose"/>
+		<on event="start" run="dedi server choose"/>
+		<on event="left" run="dedi server left"/>
+		<on event="right" run="dedi server right"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/multiplayer_type_select/dedi_server/dedi_name" x="10"/>
+		<child widget="main_menu/multiplayer_type_select/dedi_server/dedi_state" x="230"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/dedi_server/op_dedi_7" width="390" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/sel_list_item_bkd" color="#FF2896FF">
+		<on event="a" run="dedi server choose"/>
+		<on event="start" run="dedi server choose"/>
+		<on event="left" run="dedi server left"/>
+		<on event="right" run="dedi server right"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/multiplayer_type_select/dedi_server/dedi_name" x="10"/>
+		<child widget="main_menu/multiplayer_type_select/dedi_server/dedi_state" x="230"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/dedi_server/op_dedi_8" width="390" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/sel_list_item_bkd" color="#FF2896FF">
+		<on event="a" run="dedi server choose"/>
+		<on event="start" run="dedi server choose"/>
+		<on event="left" run="dedi server left"/>
+		<on event="right" run="dedi server right"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/multiplayer_type_select/dedi_server/dedi_name" x="10"/>
+		<child widget="main_menu/multiplayer_type_select/dedi_server/dedi_state" x="230"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/dedi_server/dedi_name" type="text" controller="1" width="216" height="22" font="ui\large_ui" color="#FF2896FF" text_y="4">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/dedi_server/dedi_state" type="text" controller="1" width="150" height="22" font="ui\small_ui" color="#FF70B7FF" align="right" text_y="6">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/dedi_server/dedi_details_name" type="text" controller="1" left="412" top="84" width="200" height="44" font="ui\large_ui" color="#FFFFFFFF">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/dedi_server/dedi_details_text" type="text" controller="1" left="412" top="130" width="200" height="272" font="ui\small_ui" color="#FF2896FF">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/dedi_server/dedi_details" width="640" height="480">
+		<child widget="main_menu/multiplayer_type_select/dedi_server/dedi_details_name"/>
+		<child widget="main_menu/multiplayer_type_select/dedi_server/dedi_details_text"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/dedi_server/dedi_button_save" type="text" width="128" height="24" bitmap="bitmaps/text_button_background" text="SAVE CONFIG" font="ui\small_ui" color="#FFFFFFFF" align="center" text_y="2">
+		<on event="a" run="dedi server save"/>
+		<on event="start" run="dedi server save"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/dedi_server/dedi_button_copy" type="text" width="128" height="24" bitmap="bitmaps/text_button_background" text="COPY CLI CMD" font="ui\small_ui" color="#FFFFFFFF" align="center" text_y="2">
+		<on event="a" run="dedi server copy"/>
+		<on event="start" run="dedi server copy"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/dedi_server/dedi_button_bar" type="column_list" width="640" height="28" flags="pass_unhandled_to_focused_child left_right_tabs_items">
+		<data input="common button bar update"/>
+		<child widget="main_menu/multiplayer_type_select/dedi_server/dedi_button_save" x="2" y="1"/>
+		<child widget="main_menu/multiplayer_type_select/dedi_server/dedi_button_copy" x="129" y="1"/>
+		<child widget="common_button_back" x="510" y="1"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/dedi_server/dedi_select_list" type="column_list" width="640" height="480" flags="pass_unhandled_to_focused_child up_down_tabs_children" description="main_menu/multiplayer_type_select/dedi_server/dedi_details">
+		<data input="dedi server update"/>
+		<on event="created" run="dedi server init"/>
+		<child widget="main_menu/multiplayer_type_select/dedi_server/op_dedi_1" x="20" y="73"/>
+		<child widget="main_menu/multiplayer_type_select/dedi_server/op_dedi_2" x="20" y="103"/>
+		<child widget="main_menu/multiplayer_type_select/dedi_server/op_dedi_3" x="20" y="133"/>
+		<child widget="main_menu/multiplayer_type_select/dedi_server/op_dedi_4" x="20" y="163"/>
+		<child widget="main_menu/multiplayer_type_select/dedi_server/op_dedi_5" x="20" y="193"/>
+		<child widget="main_menu/multiplayer_type_select/dedi_server/op_dedi_6" x="20" y="223"/>
+		<child widget="main_menu/multiplayer_type_select/dedi_server/op_dedi_7" x="20" y="253"/>
+		<child widget="main_menu/multiplayer_type_select/dedi_server/op_dedi_8" x="20" y="283"/>
+		<child widget="main_menu/multiplayer_type_select/dedi_server/dedi_button_bar" y="414"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/dedi_server/dedi_server_screen" width="640" height="480" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/gradient">
+		<on event="b" back="true"/>
+		<on event="back" back="true"/>
+		<child widget="main_menu/new_select/sel_list_desc_bkd"/>
+		<child widget="main_menu/multiplayer_type_select/header_dedi_server"/>
+		<child widget="main_menu/multiplayer_type_select/dedi_server/dedi_select_list"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/service_record/header_service_record" controller="1" left="35" top="11" width="363" height="59" bitmap="main_menu/multiplayer_type_select/service_record/header_service_record">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/service_record/sr_tab_0" type="text" left="51" width="232" height="32" bitmap="bitmaps/list_item_bkd_top" text="OVERVIEW" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="5">
+		<on event="a" run="service record select tab"/>
+		<on event="start" run="service record select tab"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/service_record/sr_tab_1" type="text" left="51" width="232" height="32" bitmap="bitmaps/list_item_bkd" text="FIREFIGHT STATS" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="5">
+		<on event="a" run="service record select tab"/>
+		<on event="start" run="service record select tab"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/service_record/sr_tab_2" type="text" left="51" width="232" height="32" bitmap="bitmaps/list_item_bkd" text="CAMPAIGN STATS" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="5">
+		<on event="a" run="service record select tab"/>
+		<on event="start" run="service record select tab"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/service_record/sr_tab_3" type="text" left="51" width="232" height="32" bitmap="bitmaps/list_item_bkd" text="MP STANDARD" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="5">
+		<on event="a" run="service record select tab"/>
+		<on event="start" run="service record select tab"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/service_record/sr_tab_4" type="text" left="51" width="232" height="32" bitmap="bitmaps/list_item_bkd" text="MP RANKED" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="5">
+		<on event="a" run="service record select tab"/>
+		<on event="start" run="service record select tab"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/service_record/sr_tab_5" type="text" left="51" width="232" height="32" bitmap="bitmaps/list_item_bkd" text="MEDALS CHEST" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="5">
+		<on event="a" run="service record select tab"/>
+		<on event="start" run="service record select tab"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<on event="left" run="service record medals prev"/>
+		<on event="right" run="service record medals next"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/service_record/sr_tab_6" type="text" left="51" width="232" height="32" bitmap="bitmaps/list_item_bkd" text="ACHIEVEMENTS" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="5">
+		<on event="a" run="service record select tab"/>
+		<on event="start" run="service record select tab"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<on event="left" run="service record medals prev"/>
+		<on event="right" run="service record medals next"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/service_record/sr_check_leaderboards" type="text" left="51" width="232" height="32" bitmap="bitmaps/list_item_bkd" text="CHECK LEADERBOARDS" font="ui\large_ui" color="#FFFFD040" text_x="13" text_y="5">
+		<on event="a" run="service record check leaderboards"/>
+		<on event="start" run="service record check leaderboards"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/service_record/sr_button_export" type="text" width="128" height="24" bitmap="bitmaps/text_button_background" text="EXPORT JSON" font="ui\small_ui" color="#FFFFFFFF" align="center" text_y="2">
+		<on event="a" run="service record export json"/>
+		<on event="start" run="service record export json"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/service_record/sr_button_copy_id" type="text" width="128" height="24" bitmap="bitmaps/text_button_background" text="COPY PLAYER ID" font="ui\small_ui" color="#FFFFFFFF" align="center" text_y="2">
+		<on event="a" run="service record copy id"/>
+		<on event="start" run="service record copy id"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/service_record/sr_button_link_account" type="text" width="128" height="24" bitmap="bitmaps/text_button_background" text="LINK ACCOUNT" font="ui\small_ui" color="#FFFFD040" align="center" text_y="2">
+		<on event="a" run="service record link account"/>
+		<on event="start" run="service record link account"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/service_record/service_record_button_bar" type="column_list" width="640" height="28" flags="pass_unhandled_to_focused_child left_right_tabs_items">
+		<data input="common button bar update"/>
+		<child widget="main_menu/multiplayer_type_select/service_record/sr_button_export" x="2" y="1"/>
+		<child widget="main_menu/multiplayer_type_select/service_record/sr_button_copy_id" x="134" y="1"/>
+		<child widget="main_menu/multiplayer_type_select/service_record/sr_button_link_account" x="266" y="1"/>
+		<child widget="common_button_back" x="510" y="1"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/service_record/sr_box_title" type="text" controller="1" left="290" top="88" width="285" height="22" font="ui\small_ui" color="#FFFFD040">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/service_record/sr_r1_label" type="text" controller="1" left="290" top="120" width="200" height="22" font="ui\small_ui" color="#FF2896FF">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/service_record/sr_r1_val" type="text" controller="1" left="375" top="120" width="200" height="22" font="ui\small_ui" color="#FFFFFFFF" align="right">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/service_record/sr_r2_label" type="text" controller="1" left="290" top="148" width="200" height="22" font="ui\small_ui" color="#FF2896FF">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/service_record/sr_r2_val" type="text" controller="1" left="375" top="148" width="200" height="22" font="ui\small_ui" color="#FFFFFFFF" align="right">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/service_record/sr_r3_label" type="text" controller="1" left="290" top="176" width="200" height="22" font="ui\small_ui" color="#FF2896FF">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/service_record/sr_r3_val" type="text" controller="1" left="375" top="176" width="200" height="22" font="ui\small_ui" color="#FFFFFFFF" align="right">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/service_record/sr_r4_label" type="text" controller="1" left="290" top="204" width="200" height="22" font="ui\small_ui" color="#FF2896FF">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/service_record/sr_r4_val" type="text" controller="1" left="375" top="204" width="200" height="22" font="ui\small_ui" color="#FFFFFFFF" align="right">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/service_record/sr_r5_label" type="text" controller="1" left="290" top="232" width="200" height="22" font="ui\small_ui" color="#FF2896FF">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/service_record/sr_r5_val" type="text" controller="1" left="375" top="232" width="200" height="22" font="ui\small_ui" color="#FFFFFFFF" align="right">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/service_record/sr_r6_label" type="text" controller="1" left="290" top="260" width="200" height="22" font="ui\small_ui" color="#FF2896FF">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/service_record/sr_r6_val" type="text" controller="1" left="375" top="260" width="200" height="22" font="ui\small_ui" color="#FFFFFFFF" align="right">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/service_record/sr_r7_label" type="text" controller="1" left="290" top="288" width="200" height="22" font="ui\small_ui" color="#FF2896FF">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/service_record/sr_r7_val" type="text" controller="1" left="375" top="288" width="200" height="22" font="ui\small_ui" color="#FFFFFFFF" align="right">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/service_record/sr_arrow_left" controller="1" left="290" top="324" width="16" height="16" bitmap="bitmaps/arrow_sm_left">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/service_record/sr_box_footer" type="text" controller="1" left="310" top="324" width="246" height="22" font="ui\small_ui" color="#FF2896FF" align="center">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/service_record/sr_arrow_right" controller="1" left="560" top="324" width="16" height="16" bitmap="bitmaps/arrow_sm_right">
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/service_record/service_record_ext_desc" controller="1" left="275" top="78" width="320" height="322" bitmap="bitmaps/list_field" color="#FF0080FF">
+		<child widget="main_menu/multiplayer_type_select/service_record/sr_box_title"/>
+		<child widget="main_menu/multiplayer_type_select/service_record/sr_r1_label"/>
+		<child widget="main_menu/multiplayer_type_select/service_record/sr_r1_val"/>
+		<child widget="main_menu/multiplayer_type_select/service_record/sr_r2_label"/>
+		<child widget="main_menu/multiplayer_type_select/service_record/sr_r2_val"/>
+		<child widget="main_menu/multiplayer_type_select/service_record/sr_r3_label"/>
+		<child widget="main_menu/multiplayer_type_select/service_record/sr_r3_val"/>
+		<child widget="main_menu/multiplayer_type_select/service_record/sr_r4_label"/>
+		<child widget="main_menu/multiplayer_type_select/service_record/sr_r4_val"/>
+		<child widget="main_menu/multiplayer_type_select/service_record/sr_r5_label"/>
+		<child widget="main_menu/multiplayer_type_select/service_record/sr_r5_val"/>
+		<child widget="main_menu/multiplayer_type_select/service_record/sr_r6_label"/>
+		<child widget="main_menu/multiplayer_type_select/service_record/sr_r6_val"/>
+		<child widget="main_menu/multiplayer_type_select/service_record/sr_r7_label"/>
+		<child widget="main_menu/multiplayer_type_select/service_record/sr_r7_val"/>
+		<child widget="main_menu/multiplayer_type_select/service_record/sr_arrow_left"/>
+		<child widget="main_menu/multiplayer_type_select/service_record/sr_box_footer"/>
+		<child widget="main_menu/multiplayer_type_select/service_record/sr_arrow_right"/>
+		<child widget="main_menu/current_profile_name"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/service_record/service_record_list" type="column_list" width="640" height="480" flags="pass_unhandled_to_focused_child up_down_tabs_items" description="main_menu/multiplayer_type_select/service_record/service_record_ext_desc">
+		<data input="service record update"/>
+		<on event="created" run="service record init"/>
+		<child widget="main_menu/multiplayer_type_select/service_record/sr_tab_0" y="78"/>
+		<child widget="main_menu/multiplayer_type_select/service_record/sr_tab_1" y="112"/>
+		<child widget="main_menu/multiplayer_type_select/service_record/sr_tab_2" y="146"/>
+		<child widget="main_menu/multiplayer_type_select/service_record/sr_tab_3" y="180"/>
+		<child widget="main_menu/multiplayer_type_select/service_record/sr_tab_4" y="214"/>
+		<child widget="main_menu/multiplayer_type_select/service_record/sr_tab_5" y="248"/>
+		<child widget="main_menu/multiplayer_type_select/service_record/sr_tab_6" y="282"/>
+		<child widget="main_menu/multiplayer_type_select/service_record/sr_check_leaderboards" y="358"/>
+		<child widget="main_menu/multiplayer_type_select/service_record/service_record_button_bar" y="414"/>
+	</widget>
+	<widget name="main_menu/multiplayer_type_select/service_record/service_record_screen" width="640" height="480" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/gradient">
+		<on event="b" back="true"/>
+		<on event="back" back="true"/>
+		<child widget="main_menu/multiplayer_type_select/service_record/header_service_record"/>
+		<child widget="main_menu/multiplayer_type_select/service_record/service_record_list"/>
+		<child widget="main_menu/blueline" x="64" y="349"/>
+	</widget>
+</menus>

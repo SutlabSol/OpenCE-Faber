@@ -1,0 +1,46 @@
+# IDE folders
+.idea/
+.vs/
+
+# Caches
+__pycache__
+.mypy_cache
+.pytest_cache/
+.cache/
+
+# Build files
+build/
+.ninja_*
+build.ninja
+*.zip
+
+# Generated configs
+compile_commands.json
+halo.log
+device_identity.txt
+
+# The January build and the Xbox SDK (tools/xdk_headers.py reads the
+# build's PDB); never commit
+*.exe
+*.pdb
+*.map
+*.pack
+*.ocreplay
+xbox/
+!source/**/xbox/
+
+# Locally extracted proprietary game data (never commit)
+assets/
+# (but the high-res assets, drawn for the port: tools/hud_assets.py)
+!port/assets/
+!port/forge/assets/
+original/
+maps/
+custom_maps/
+Faber_data/
+saves/
+replays/
+screenshots/
+
+# CI build outputs (tools/ci_build.py)
+dist/
