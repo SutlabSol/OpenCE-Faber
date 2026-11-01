@@ -7264,6 +7264,9 @@ static void ui_widgets_process_mouse(
 	return;
 }
 
+/* port: Forge's preview of the tag chosen in its menus
+(port/forge/src/forge_runtime_tags.c; NULL on the builds without Forge,
+port/linux/game/forge_fallbacks.c) */
 extern struct bitmap_data *forge_tag_preview_get_bitmap(void);
 
 static void widget_instance_render_recursive(

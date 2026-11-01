@@ -7,6 +7,12 @@ implements the Xbox APIs the game calls, and features the Xbox game did not
 have (a new netcode, internet play, the PC version's menus, Custom Edition
 maps, touch controls). The project is published as OpenCE.
 
+This repository is **OpenCE : Faber**, a fork of OpenCE that adds Forge (an
+in-engine editor), Firefight, Theater, a Creation Hub (tag editor, tag
+injector, firing range), ranks, and a dedicated server director, while staying
+able to play with stock OpenCE. "Faber" below covers what the fork adds; the
+section of that name lists its own rules.
+
 Start with [README.md](README.md). The other documents are listed at the
 end.
 
@@ -18,6 +24,7 @@ end.
 | `port/linux/src/` | The platform layer the three ports share: Direct3D 8 on OpenGL (`d3d8_gl.c`), DirectSound and XInput on SDL3, files, threads, memory, sockets, settings (`port_config.c`), the mods folder (`port_mods.c`), internet play (`p2p*.c`) |
 | `port/linux/game/` | The port's game-side code, compiled as the game's sources are: the distributed netcode (`network_*.c`), co-op, OpenCE's gametypes (`game_modes.c`, `infection.c`, `gun_game.c`), map sharing (`map_share*.c`), the menus (`menu_tags.c`, `menu_functions.c`), Custom Edition maps (`custom_edition_*.c`, `cache_file_formats.c`), the tag validator (`tag_validate.c`, `tag_schema_*.c`), mods (`mods.c`, `mod_*.c`), streamer mode's word filter (`text_filter*.c`), touch, FOV and more |
 | `port/linux/include/` | The port's headers: the limits (`halo_port_limits.h`, with `HALO_PORT_NETWORK_VERSION`), capacities (`halo_port_capacity.h`), the prefix header, `halo_linux_source_fixups.h` (port functions the game's sources call) |
+| `port/forge/` | Faber's Forge, built into the Windows build only: the 3D editor, the local tag cache, runtime tag cloning, `.map` export, Forge networking (`src/`, `include/forge_engine.h`), the CLI cache compiler (`tools/`), and what is packaged into `Faber_data/` (`assets/`). Its README and `projectrules.md` are in `assets/` |
 | `port/include/xdk/` | Stand-ins for the Xbox SDK's headers (declarations only) |
 | `port/windows/` | The Windows build's own files (`win32_*.c`, headers) |
 | `port/android/` | The Android app: the guest runtime, the host library (`host/`), the Java app (`app/`), host imports (`host_imports.list`) |
@@ -209,6 +216,40 @@ notices and its licence, and says where it came from.
 The decompilation's upstream, punpckhdq/halo, is AGPL 3.0 from 17 October
 2026; bnunu/halo-1 is CC0.
 
+### Faber
+
+- Forge (`port/forge/src`) is compiled by `tools/windows_build.py` only.
+  The Linux, Android and web builds must still link: a name that the shared
+  code (`source/`, `port/linux/game`, `port/linux/src`) calls and Forge
+  defines needs a fallback in `port/linux/game/forge_fallbacks.c`, which
+  compiles to nothing on Windows. Forge reads the keyboard with Win32's
+  `GetAsyncKeyState`; replace that with the engine's input before building
+  Forge anywhere else.
+- Forge has its own network version, `FORGE_NETWORK_VERSION`
+  (`port/forge/include/forge_engine.h`), used while
+  `g_forge_session_enabled` is set; `forge_net_override.h` routes
+  `HALO_PORT_NETWORK_VERSION` through `forge_get_network_version()` in the
+  units the Windows build force-includes it into. Raise
+  `FORGE_NETWORK_VERSION` for changes to what Forge clients send each
+  other, and `HALO_PORT_NETWORK_VERSION` for changes to what every build
+  sends.
+- `FORGE_VERSION_STRING` is the release version; `tools/linux_build.py`
+  derives the build number from it.
+- Faber-only runtime files live in `Faber_data/` beside the executable
+  (`ninja windows` packages `port/forge/assets` there with
+  `OpenCE - Faber.exe`, the same build as `halo.exe`). Do not move the files
+  OpenCE shares (`maps/`, `custom_maps/`, `saves/`, `config.toml`).
+- Faber raises the memory limits: the contiguous window
+  (`PORT_WINDOW_SIZE` in `port/linux/include/halo_port_window.h`, 512 MB)
+  and the cache and texture sizes. Check Android and the web, whose address
+  space is smaller, when raising them further.
+- No retail data in the repository: no `.map` files, and no tags extracted
+  from them. Forge's tag cache is built from the user's own maps on first
+  use. A tag file that is checked in (`port/forge/assets/cached_tags/`, the
+  embedded `forge_marker_ftags_embed.h`) must be the project's own work, and
+  say how it was made.
+- Forge's own rules are in `port/forge/assets/projectrules.md`.
+
 ### Commits and pull requests
 
 - Commit subjects are plain sentences saying what changed; the body says
@@ -223,7 +264,9 @@ The decompilation's upstream, punpckhdq/halo, is AGPL 3.0 from 17 October
 
 | Document | About |
 | --- | --- |
-| [README.md](README.md) | Downloads, game data, building, build options, profiling builds |
+| [README.md](README.md) | Faber's features, installation and Windows build |
+| [port/forge/assets/README.md](port/forge/assets/README.md) | Forge: its layout, the local tag cache, map export, networking |
+| [port/forge/assets/projectrules.md](port/forge/assets/projectrules.md) | The rules Forge code follows |
 | [port/linux/README.md](port/linux/README.md) | The Linux build, controls, menus, every setting, updates, frame rate, field of view, system link, internet play, voice chat, the server browser, map sharing, security, map checks, how the port operates, the game source changes |
 | [port/linux/NETCODE.md](port/linux/NETCODE.md) | The distributed netcode, network versions, joining a game in progress, map sharing, transport, testing |
 | [port/windows/README.md](port/windows/README.md) | The Windows build, its headers, inline functions, crash reports |

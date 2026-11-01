@@ -5,7 +5,7 @@
 **An expansive Creation, Survival, Forge, Theater, and Multiplayer Suite built on [OpenCE](https://github.com/thelinkin3000/halo-ce-universal) (Halo: Combat Evolved Decompilation Port).**
 
 [![Latest Release](https://img.shields.io/github/v/release/SutlabSol/OpenCE-Faber?label=release&color=2ea44f)](https://github.com/SutlabSol/OpenCE-Faber/releases/latest)
-[![Platform: Windows & Linux](https://img.shields.io/badge/Platform-Windows%20%C2%B7%20Linux-0078D6)](#installation)
+[![Platform: Windows](https://img.shields.io/badge/Platform-Windows-0078D6)](#installation)
 [![Engine: 122 MB Map Support](https://img.shields.io/badge/Map%20Limit-122%20MB%20%2F%20512%20MB%20RAM-orange)](#engine--memory-upgrades-122-mb-map-limit)
 [![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)](LICENSE)
 
@@ -68,7 +68,10 @@ Edit any map in real time, solo or in online Co-Op Forge sessions:
 - **Cross-Map Runtime Tag Cloning (`.ftag`):** Spawn vehicles, weapons, scenery, interactive machines/doors, bipeds, gametype markers, and live AI combat units from across the entire Campaign and Custom Edition library into any map at runtime.
 - **Active In-Engine AI Placement:** Spawn Friendly or Enemy AI actors (`Marines`, `Elites`, `Grunts`, `Jackals`, `Hunters`, `Flood`, `Sentinels`) that immediately initialize with combat perception and pathfinding, and bake directly into `scenario->ai_encounters` when exported.
 - **First-Launch Local Tag Cache Builder:** Automatically indexes and extracts `.ftag` bundles and embedded diffuse bitmaps from your local `maps/` and `custom_maps/` into `Faber_data/cached_tags/` on first use, recording full creator attributions in `Faber_data/credits.md`.
-- **Standalone `.map` Export (`[F5]`):** Save your creation to `custom_maps/<map_name>.map` (with an automatic `.bmp` preview thumbnail and `.txt` description) so anyone can play it without needing extra tag packs.
+- **Standalone `.map` Export (`[F5]`):** Save your creation to `custom_maps/<map_name>.map`, with its preview thumbnail and description stored inside the map (drop a `Faber_data/custom_bmp/<map_name>.bmp` to use your own thumbnail), so anyone can play it without needing extra tag packs.
+
+> [!NOTE]
+> Forge is currently built into the Windows build only.
 
 ---
 
@@ -185,10 +188,13 @@ This builds:
 - `build/windows/brokers.txt` & `build/windows/masters.txt`
 - `build/windows/Faber_data/`
 
+### Other platforms
+The Linux, Android and web builds (`ninja linux`, `ninja android`, `ninja web`; see [AGENTS.md](AGENTS.md) and the READMEs under `port/`) compile everything in `port/linux/game/`, including Firefight, Theater, the firing range, the tag editor and the server director, but **not Forge** (`port/forge/`), which is Windows-only for now. See [port/forge/assets/README.md](port/forge/assets/README.md).
+
 ---
 
 ## Credits & License
 - **OpenCE : Faber** is developed by **SutlabSol**, expanding upon the [OpenCE](https://github.com/thelinkin3000/halo-ce-universal) project.
 - Built on the decompilation of Halo: Combat Evolved (`01.01.14.2342`) and the OpenCE cross-platform runtime layer.
 - Community custom map tags extracted by the local tag cache builder are automatically attributed to their original map creators in `Faber_data/credits.md`.
-- Licensed under the [GNU Affero General Public License v3.0 or later (`AGPL-3.0-or-later`)](LICENSE). See [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt) for third-party library licenses.
+- Licensed under the [GNU Affero General Public License v3.0 or later (`AGPL-3.0-or-later`)](LICENSE). Each vendored library's licence, version and upstream are listed in its README under [`port/third_party/`](port/third_party).
