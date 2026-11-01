@@ -16,7 +16,7 @@ OpenCE Forge is a standalone, non-destructive 3D Forge World Editor and Multipla
 │   ├── tools/                            # Standalone forge_asset_compiler.exe CLI tool
 │   └── cached_tags/                      # Local Tag Cache Folder System (built automatically on first launch)
 │       ├── catalog.txt                   # Base tag cache manifest (CE multiplayer + Xbox/PC campaign tags)
-│       ├── custom_catalog.txt            # User-added custom map tag manifest ([F9] Add Tags to Cache)
+│       ├── custom_catalog.txt            # User-added custom map tag manifest (Tag Vault / Creation Hub)
 │       ├── bitmaps_cache.bin             # Embedded diffuse bitmap & tag data cache
 │       ├── vehicles/                     # Extracted 3D vehicle .ftag bundles
 │       ├── weapons/                      # Extracted 3D weapon .ftag bundles
@@ -51,7 +51,7 @@ So that no copyrighted `.map` files or pre-packaged tag caches need to be distri
 2. Point to your **Halo Xbox / Retail PC `maps` folder** (`bitmaps.map`, `sounds.map`, and campaign `.map` files).
 3. Forge extracts and builds your local tag cache in **`OpenCE Forge/cached_tags/`** (`.ftag` 3D mesh/shader bundles, `catalog.txt`, and embedded campaign/multiplayer bitmaps in `bitmaps_cache.bin`), and records creator attribution in `OpenCE Forge/credits.md`.
 
-You can also add tags from any custom `.map` file at any time in Forge Mode via **`[F2] Spawn Menu -> [F9] Add Tags to Cache`** (`MAPS` window).
+You can also add tags from any custom `.map` file at any time via the **TAG OPTIONS** Creation Hub menu on the main menu.
 
 ---
 

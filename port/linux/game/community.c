@@ -1989,7 +1989,7 @@ UPDATE_REPOSITORY), asked for once the main menu first shows and again,
 at most once a minute, while no answer came; their notes' Markdown made the
 menus' plain text. Nothing is shown of them until they came */
 
-#define NEWS_URL "https://api.github.com/repos/Watanoge/open-ce-ultimate-campaign/releases?per_page=30"
+#define NEWS_URL "https://api.github.com/repos/SutlabSol/OpenCE-Faber/releases?per_page=30"
 #define NEWS_HEADERS "Accept: application/vnd.github+json\r\n"
 /* (each release's assets are most of an answer: some 15 KB a release) */
 #define NEWS_ANSWER_MAXIMUM (1024 * 1024)

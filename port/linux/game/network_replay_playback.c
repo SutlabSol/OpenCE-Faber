@@ -485,6 +485,15 @@ boolean network_replay_watch(
 	why[0] = 0;
 	playback_free();
 	file = platform_fopen_host(path, "rb");
+	if (!file && path && path[0])
+	{
+		char folder[4096];
+		char full[4096];
+
+		network_replay_folder(folder, sizeof(folder));
+		snprintf(full, sizeof(full), "%s/%s", folder, path);
+		file = platform_fopen_host(full, "rb");
+	}
 	if (!file)
 	{
 		snprintf(why, (size_t)why_size, "The replay cannot be opened.");
@@ -530,6 +539,7 @@ boolean network_replay_watch(
 		playback_free();
 		return FALSE;
 	}
+	size = playback.size;
 	/* (its first record is the game) */
 	if (playback.data[header_size] != _network_replay_game ||
 		(playback.data[header_size + 2] | playback.data[header_size + 3] << 8) != sizeof(game) ||

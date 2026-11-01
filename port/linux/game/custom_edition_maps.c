@@ -984,9 +984,10 @@ short custom_edition_maps_display_index(
 	char path[MAP_SHARE_PATH_SIZE];
 	short map_index;
 
-	/* (only a custom_maps\ name is a CE map's; any other is the game's own,
-	a stock campaign level or none of these) */
-	if (!custom_edition_level_name(level_name))
+	/* (only a custom_maps\ name is a CE or custom_maps Forge map's; any other
+	is the game's own, a stock campaign level or none of these) */
+	if (!level_name ||
+		_strnicmp(level_name, CUSTOM_EDITION_LEVEL_NAME_PREFIX, csstrlen(CUSTOM_EDITION_LEVEL_NAME_PREFIX)) != 0)
 	{
 		short level = campaign_level_from_name(level_name);
 

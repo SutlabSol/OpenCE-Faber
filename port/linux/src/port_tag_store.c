@@ -14,14 +14,14 @@ tags and each region are kept compressed by zlib when that makes them an
 eighth smaller (a Custom Edition map's uncompressed bitmaps are; its DXT
 bitmaps and ADPCM samples hardly).
 
-	tag file (`name`.tagref): 'OCTR', version, the bundle's size, its tags'
+	tag file (`name`.fbrtag): 'FABR', version, the bundle's size, its tags'
 	  size (where its file data starts), their stored size, their flags,
 	  the region count, 0; each region (its offset in file data, size, hash
 	  low, high, CRC, 0); then the tags, stored
-	pack (tags.pack): 'OCTP', version, its generation, 0; then each
+	pack (faber_vault.bin): 'FABV', version, its generation, 0; then each
 	  region: a record (size, hash low, high, CRC, stored size, flags, 0, 0)
 	  and its stored bytes
-	index (tags.index): 'OCTI', version, the pack's generation, the entry
+	index (faber_vault.idx): 'FABX', version, the pack's generation, the entry
 	  count; then each region the pack has (size, hash low, high, CRC, where
 	  its stored bytes are, stored size, flags, 0), in their keys' order
 
@@ -55,10 +55,10 @@ int compress2(Bytef *destination, uLongf *destination_length, const Bytef *sourc
 
 /* ---------- constants */
 
-/* "OCTR", "OCTP", "OCTI" */
-#define TAG_FILE_SIGNATURE 0x5254434FUL
-#define PACK_SIGNATURE 0x5054434FUL
-#define INDEX_SIGNATURE 0x4954434FUL
+/* "FABR", "FABV", "FABX" */
+#define TAG_FILE_SIGNATURE 0x52424146UL
+#define PACK_SIGNATURE 0x56424146UL
+#define INDEX_SIGNATURE 0x58424146UL
 #define STORE_VERSION 1
 
 #define TAG_FILE_HEADER_BYTES 32
@@ -68,8 +68,8 @@ int compress2(Bytef *destination, uLongf *destination_length, const Bytef *sourc
 #define INDEX_HEADER_BYTES 16
 #define INDEX_ENTRY_BYTES 32
 
-#define PACK_NAME "tags.pack"
-#define INDEX_NAME "tags.index"
+#define PACK_NAME "faber_vault.bin"
+#define INDEX_NAME "faber_vault.idx"
 
 /* stored by zlib (else as it is) */
 #define STORED_DEFLATED 1

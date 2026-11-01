@@ -52,6 +52,25 @@ static void windows_startup(void)
 	{
 		*slash = '\0';
 		SetCurrentDirectoryA(path);
+		if (GetFileAttributesA("maps") == INVALID_FILE_ATTRIBUTES &&
+			GetFileAttributesA("build\\windows\\SDL3.dll") != INVALID_FILE_ATTRIBUTES)
+		{
+			char bw_dir[MAX_PATH];
+			int n = _snprintf(bw_dir, sizeof(bw_dir), "%s\\build\\windows", path);
+			if (n > 0 && n < (int)sizeof(bw_dir))
+			{
+				SetDllDirectoryA(bw_dir);
+				SetCurrentDirectoryA(bw_dir);
+			}
+		}
+		else if (GetFileAttributesA("SDL3.dll") == INVALID_FILE_ATTRIBUTES &&
+			GetFileAttributesA("Faber_data\\SDL3.dll") != INVALID_FILE_ATTRIBUTES)
+		{
+			char fd_dir[MAX_PATH];
+			int n = _snprintf(fd_dir, sizeof(fd_dir), "%s\\Faber_data", path);
+			if (n > 0 && n < (int)sizeof(fd_dir))
+				SetDllDirectoryA(fd_dir);
+		}
 		*slash = '\\';
 		if (_fileno(stderr) < 0 && !crash_reporter_process())
 		{

@@ -2085,7 +2085,7 @@ static boolean player_teleport_internal(
 	match_assert(
 		"c:\\halo\\SOURCE\\game\\players.c",
 		0x4FB,
-		source_unit_index==NONE || local_player_count()>1 || game_connection()!=_game_connection_local);
+		source_unit_index==NONE || local_player_count()>1 || (player_data && player_data->count>1) || game_connection()!=_game_connection_local);
 	if (source_unit_index != NONE &&
 		object_get_ultimate_parent(source_unit_index) != source_unit_index)
 	{

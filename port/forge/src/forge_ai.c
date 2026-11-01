@@ -143,23 +143,3 @@ int32_t forge_ai_spawn_unit_live(
 
 	return (int32_t)actor_index;
 }
-
-void forge_ai_clear_all_live(void)
-{
-	int i;
-	for (i = 0; i < g_forge.live_instance_count; i++)
-	{
-		if (g_forge.live_instances[i].active && g_forge.live_instances[i].is_ai_unit)
-		{
-			if (g_forge.live_instances[i].actor_index != NONE && g_forge.live_instances[i].actor_index >= 0)
-			{
-				actor_erase(g_forge.live_instances[i].actor_index, TRUE);
-			}
-			else if (g_forge.live_instances[i].object_index != NONE && g_forge.live_instances[i].object_index >= 0)
-			{
-				object_delete(g_forge.live_instances[i].object_index);
-			}
-			g_forge.live_instances[i].active = 0;
-		}
-	}
-}

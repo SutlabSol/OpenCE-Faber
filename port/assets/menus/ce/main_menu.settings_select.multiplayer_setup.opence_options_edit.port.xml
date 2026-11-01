@@ -7,7 +7,7 @@
 	</widget>
 	<widget name="main_menu/settings_select/multiplayer_setup/opence_options_edit/header_opence" controller="1" left="35" top="11" width="363" height="59" type="text" text="OPENCE OPTIONS" font="ui\large_ui" color="#FFFFFFFF" text_x="13" text_y="16">
 	</widget>
-	<widget name="main_menu/settings_select/multiplayer_setup/opence_options_edit/opence_help" type="text" controller="1" left="68" top="341" width="482" height="79" string_list="main_menu/settings_select/multiplayer_setup/opence_options_edit/cap_opence" font="ui\large_ui" color="#FFFFFFFF">
+	<widget name="main_menu/settings_select/multiplayer_setup/opence_options_edit/opence_help" type="text" controller="1" left="68" top="368" width="482" height="52" string_list="main_menu/settings_select/multiplayer_setup/opence_options_edit/cap_opence" font="ui\large_ui" color="#FFFFFFFF">
 	</widget>
 	<widget name="main_menu/settings_select/multiplayer_setup/opence_options_edit/opence_menu" type="column_list" width="640" height="480" flags="pass_unhandled_to_focused_child up_down_tabs_children" description="main_menu/settings_select/multiplayer_setup/opence_options_edit/opence_help">
 		<data input="game settings lists text update"/>
@@ -30,8 +30,8 @@
 		<child widget="common_button_cancel" x="510" y="1"/>
 	</widget>
 	<widget name="main_menu/settings_select/multiplayer_setup/opence_options_edit/opence_button_ok" type="text" width="128" height="24" bitmap="bitmaps/text_button_background" string_list="strings/common_button_captions" string_index="1" font="ui\small_ui" color="#FFFFFFFF" align="center" text_y="2">
-		<on event="a" run="mp profile set opence options" back="true"/>
-		<on event="start" run="mp profile set opence options" back="true"/>
+		<on event="a" run="mp profile set opence options"/>
+		<on event="start" run="mp profile set opence options"/>
 		<on event="left_mouse" run="mouse emit accept event"/>
 	</widget>
 	<widget name="main_menu/settings_select/multiplayer_setup/opence_options_edit/op_oce_mode" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">

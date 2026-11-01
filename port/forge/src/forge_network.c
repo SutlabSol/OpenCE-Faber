@@ -696,7 +696,7 @@ static void forge_client_handle_host_spawn(
 		return;
 
 	actual_grp = ce->group_tag;
-	if (ce->group_tag != 'spwn' && ce->group_tag != 'tele' && ce->group_tag != 'flag')
+	if (ce->group_tag != 'spwn' && ce->group_tag != 'tele' && ce->group_tag != 'flag' && ce->group_tag != 'ffsp')
 	{
 		/* Fault in external Xbox campaign tags or .ocetags packages on the client before object creation! */
 		def_idx = forge_resolve_engine_tag(ce->group_tag, ce->tag_path, &actual_grp);

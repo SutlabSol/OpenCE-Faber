@@ -862,15 +862,6 @@ short cache_file_read(
 	short request_index = cache_request_next_free_index();
 	struct cache_file_request *request = cache_request_get(request_index);
 
-	/* port: the reads of a Halo Custom Edition map are served in place, at
-	once; the request stays free (port/linux/game/custom_edition_cache.c) */
-	if (custom_edition_cache_tags_loaded())
-	{
-		custom_edition_cache_read(tag_index, offset, size, buffer);
-		*completion_flag_reference = TRUE;
-
-		return request_index;
-	}
 	/* port: a tag the campaign randomizer copied from another map: its
 	bitmap pixels and sound samples stay in that map (port/linux/game/randomizer.c);
 	or one the Tag Injector's profile added, in its bundle
@@ -886,6 +877,15 @@ short cache_file_read(
 
 			return request_index;
 		}
+	}
+	/* port: the reads of a Halo Custom Edition map are served in place, at
+	once; the request stays free (port/linux/game/custom_edition_cache.c) */
+	if (custom_edition_cache_tags_loaded())
+	{
+		custom_edition_cache_read(tag_index, offset, size, buffer);
+		*completion_flag_reference = TRUE;
+
+		return request_index;
 	}
 	match_assert(
 		"c:\\halo\\SOURCE\\cache\\cache_files_windows.c",
@@ -1294,6 +1294,22 @@ static void cache_file_get_map_path(
 	{
 		error(_error_silent, "map path for '%.64s' is too long", map_name);
 		path[0] = 0;
+	}
+	else
+	{
+		struct file_reference reference;
+
+		/* If not in d:\maps\, check d:\custom_maps\ (for Xbox v5 FLG1 Forge maps saved in custom_maps\) */
+		if (!file_exists(file_reference_create_from_path(&reference, path, FALSE)))
+		{
+			char custom_path[MAXIMUM_MAP_PATH_LENGTH];
+
+			if (custom_edition_map_file_named(map_name, custom_path))
+			{
+				strncpy(path, custom_path, MAXIMUM_MAP_PATH_LENGTH - 1);
+				path[MAXIMUM_MAP_PATH_LENGTH - 1] = 0;
+			}
+		}
 	}
 
 	return;

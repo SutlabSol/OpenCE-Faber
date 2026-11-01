@@ -162,14 +162,25 @@ def build_repository() -> str:
     return repository if re.fullmatch(r"[A-Za-z0-9_.-]{1,39}/[A-Za-z0-9_.-]{1,100}", repository) else ""
 
 
+def _default_faber_build_number() -> str:
+    try:
+        hdr = (Path(__file__).resolve().parent.parent / "port/forge/include/forge_engine.h").read_text(encoding="utf-8", errors="ignore")
+        m = re.search(r'#define\s+FORGE_VERSION_STRING\s+"(\d+)\.(\d+)\.(\d+)"', hdr)
+        if m:
+            return str(int(m.group(1)) * 100 + int(m.group(2)) * 10 + int(m.group(3)))
+    except Exception:
+        pass
+    return "0"
+
+
 def updater_defines(release: bool) -> str:
     """the self-updater's build (port/linux/src/updater.c): its number, from
     HALO_BUILD_NUMBER (tools/ci_build.py gives it for a release tag's builds; none
     elsewhere, which never look for updates), its configuration, and the
     repository it is made from (build_repository)"""
-    number = os.environ.get("HALO_BUILD_NUMBER", "0")
+    number = os.environ.get("HALO_BUILD_NUMBER", "") or _default_faber_build_number()
     if not number.isdigit():
-        number = "0"
+        number = _default_faber_build_number()
     flavor = "release" if release else "debug"
     return (f'-DHALO_BUILD_NUMBER={number} -DHALO_BUILD_FLAVOR=\\"{flavor}\\" '
             f'-DHALO_BUILD_REPOSITORY=\\"{build_repository()}\\"')

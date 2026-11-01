@@ -723,10 +723,8 @@ long network_game_get_number_of_games_played(
 {
 	struct network_game *game = network_game_get_game();
 
-	match_assert(
-		"c:\\halo\\SOURCE\\networking\\network_game_globals.c",
-		0x55,
-		game);
+	if (!game)
+		return 0;
 
 	return game->number_of_games_played;
 }
@@ -736,10 +734,8 @@ long network_game_get_random_seed(
 {
 	struct network_game *game = network_game_get_game();
 
-	match_assert(
-		"c:\\halo\\SOURCE\\networking\\network_game_globals.c",
-		0x73,
-		game);
+	if (!game)
+		return 0;
 
 	return game->random_seed;
 }

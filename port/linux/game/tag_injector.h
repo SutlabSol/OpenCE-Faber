@@ -22,6 +22,7 @@ enum tag_injector_category
 	_tag_injector_vehicles,
 	_tag_injector_bipeds,
 	_tag_injector_scenery,
+	_tag_injector_devices,
 
 	NUMBER_OF_TAG_INJECTOR_CATEGORIES
 };
@@ -79,6 +80,9 @@ boolean tag_injector_category_addable(
 	short category);
 /* the group of a category's tags ('weap'), or 0 */
 unsigned long tag_injector_category_group(
+	short category);
+boolean tag_injector_group_in_category(
+	unsigned long group_tag,
 	short category);
 /* the open map's tags of a category: how many, and the path of each (by
 path, alphabetically) */

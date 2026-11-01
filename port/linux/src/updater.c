@@ -67,8 +67,8 @@ worker) */
 #define HALO_BUILD_FLAVOR "release"
 #endif
 
-#define UPDATE_REPOSITORY "SutlabSol/OpenCE-Genesis"
-#define UPDATE_FALLBACK_REPOSITORY "SutlabSol/OpenCE-Firefight"
+#define UPDATE_REPOSITORY "SutlabSol/OpenCE-Faber"
+#define UPDATE_FALLBACK_REPOSITORY "SutlabSol/OpenCE-Faber"
 #ifdef _WIN32
 #define PATH_SEPARATOR "\\"
 #else
@@ -414,8 +414,9 @@ static long parse_release_version_number(const char *tag_str)
 	num = strtol(p, (char **)&p, 10);
 	if (*p == '.')
 	{
-		long minor = strtol(p + 1, NULL, 10);
-		return num * 100 + minor;
+		long minor = strtol(p + 1, (char **)&p, 10);
+		long patch = (*p == '.') ? strtol(p + 1, NULL, 10) : 0;
+		return num * 100 + minor * 10 + patch;
 	}
 	return num;
 }

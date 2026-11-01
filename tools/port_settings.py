@@ -48,7 +48,7 @@ SCREENS = {
         # the other screens' 30px step. each platform packs its own rows, so
         # a row hidden on this machine does not leave a gap
         "spacing": 30,
-        "help_top": 364,
+        "help_top": 374,
         "platform_places": True,
         # (rows in the place of the row before them: Window Size in
         # Resolution's, port/linux/game/menu_functions.c showing the one the
@@ -571,7 +571,7 @@ def _setting_screen(folder: str, spec: dict) -> list:
 def _controls_screen() -> list:
     folder = "controls_setup"
     base = f"{PE}/{folder}"
-    spec = {"screen": "controls_settings_screen", "spacing": 30,
+    spec = {"screen": "controls_settings_screen", "spacing": 28, "help_top": 380,
             "header": ("header_profile_controls_settings", f"{base}/header_profile_controls_settings")}
     rows, extra = [(f"{base}/op_group", None)], []
     extra += _widget(f"{base}/op_group", [("width", 512), ("height", 28), ("flags", "pass_unhandled_to_focused_child"),
@@ -778,6 +778,7 @@ STRING_OVERRIDES.update({
         "Host a game on your LAN\\nonly.",
         "Play on this computer alone:\\nsplit screen, and bots in\\nSlayer games.",
         "Play the campaign with a\\nfriend in split screen:\\nplayer 2 on a gamepad.",
+        "Browse and load your saved\\nForge and custom maps.",
         "Set all the attributes for your \\nmultiplayer gametypes and\\nkeep them for future use.",
     ],
     # (and the port's OPENCE: OpenCE's gametypes, port/linux/game/game_modes.c)
@@ -828,7 +829,7 @@ STRING_OVERRIDES.update({
 OVERRIDE_ORIGINALS = {
     f"{PE}/profile_edit_descriptions": [0, None, None, None, None, None, None, 7, None],
     f"{MT}/multiplayer_options": [0, 1, 2, 3, None, 5, None, None, None],
-    f"{MT}/multiplayer_option_descriptions": [0, 1, None, None, 4, None, None, 5],
+    f"{MT}/multiplayer_option_descriptions": [0, 1, None, None, 4, None, None, None, 5],
     "main_menu/gametype_select/var_gametype_banks": [0, None, 2],
     "main_menu/settings_select/multiplayer_setup/item_options_edit/item_options_labels": [0, 1, 2, 3, 4] + [None] * 4,
     # (the first's note that infinite grenades work only with 4 players or
@@ -1162,8 +1163,8 @@ def _server_settings() -> list:
     whether the server browser lists it (PUBLIC or PRIVATE: an internet
     game's)"""
     base = f"{MT}/server_settings"
-    # (thirteen rows: shifted up with 22px step so BOT OPTIONS sits cleanly above help_top=366)
-    spec = {"screen": "server_settings_screen", "row_top": 66, "spacing": 22, "help_top": 366,
+    # (standard 28px row spacing; server_settings_update packs visible rows dynamically)
+    spec = {"screen": "server_settings_screen", "row_top": 73, "spacing": 28, "help_top": 380,
             "header": ("header_server_settings", f"{base}/header_server_settings")}
     rows, extra = [], []
     extra += _value_row(base, "server_name", 0, "ss edit server name")
@@ -1499,8 +1500,8 @@ def _setup_option_screen(base: str, key: str, rows: list) -> list:
                                             ("bitmap", "bitmaps/gradient")],
                     [f'<child widget="{base}/header_{key}"/>', f'<child widget="{base}/{key}_menu"/>'])
     lines += _header(f"{base}/header_{key}", f"{base}/header_{key}")
-    lines += _widget(f"{base}/{key}_help", [("type", "text"), ("controller", 1), ("left", 68), ("top", 341),
-                                           ("width", 482), ("height", 79), ("string_list", f"{base}/cap_{key}"),
+    lines += _widget(f"{base}/{key}_help", [("type", "text"), ("controller", 1), ("left", 68), ("top", 368),
+                                           ("width", 482), ("height", 52), ("string_list", f"{base}/cap_{key}"),
                                            ("font", "ui\\large_ui"), ("color", "#FFFFFFFF")], [])
     children = ['<data input="game settings lists text update"/>',
                 '<on event="created" run="port setup options init"/>']
@@ -2593,19 +2594,29 @@ def _forge_screens() -> list:
 
     # 1b. Forge Tag Options menu (opened from Forge -> TAG OPTIONS, styled identically to Forge Hub)
     tag_options_items = [
-        ("forge_item_inject_tags", "SYNC CUSTOM TAGS", "bitmaps/list_item_bkd_top", [
-            '<on event="a" run="port mods save"/>',
-            '<on event="start" run="port mods save"/>',
+        ("forge_item_add_tags", "ADD TAGS", "bitmaps/list_item_bkd_top", [
+            f'<on event="a" open="{fbase}/forge_add_tags_map_screen"/>',
+            f'<on event="start" open="{fbase}/forge_add_tags_map_screen"/>',
             '<on event="left_mouse" run="mouse emit accept event"/>',
         ]),
-        ("clear_custom_cache_profile_item", "CLEAR CUSTOM TAGS", "bitmaps/list_item_bkd", [
-            '<on event="a" run="port mods close"/>',
-            '<on event="start" run="port mods close"/>',
+        ("forge_item_installed_tags", "INSTALLED TAGS", "bitmaps/list_item_bkd", [
+            f'<on event="a" open="{fbase}/forge_installed_tags_screen"/>',
+            f'<on event="start" open="{fbase}/forge_installed_tags_screen"/>',
             '<on event="left_mouse" run="mouse emit accept event"/>',
         ]),
-        ("reset_tag_cache_profile_item", "RESET TAG CACHE", "bitmaps/list_item_bkd", [
-            '<on event="a" run="port mods close"/>',
-            '<on event="start" run="port mods close"/>',
+        ("forge_item_reset_stock_tags", "RESET STOCK TAGS", "bitmaps/list_item_bkd", [
+            f'<on event="a" open="{fbase}/forge_confirm_reset_stock_screen"/>',
+            f'<on event="start" open="{fbase}/forge_confirm_reset_stock_screen"/>',
+            '<on event="left_mouse" run="mouse emit accept event"/>',
+        ]),
+        ("forge_item_reset_custom_tags", "RESET CUSTOM TAGS", "bitmaps/list_item_bkd", [
+            f'<on event="a" open="{fbase}/forge_confirm_reset_custom_screen"/>',
+            f'<on event="start" open="{fbase}/forge_confirm_reset_custom_screen"/>',
+            '<on event="left_mouse" run="mouse emit accept event"/>',
+        ]),
+        ("forge_item_snap_points", "SNAP POINTS", "bitmaps/list_item_bkd", [
+            f'<on event="a" open="{fbase}/forge_snap_points_screen"/>',
+            f'<on event="start" open="{fbase}/forge_snap_points_screen"/>',
             '<on event="left_mouse" run="mouse emit accept event"/>',
         ]),
     ]
@@ -2633,6 +2644,307 @@ def _forge_screens() -> list:
                       f'<child widget="{MT}/header_forge"/>',
                       f'<child widget="{fbase}/forge_tag_options_select_list"/>',
                       '<child widget="main_menu/blueline" x="64" y="349"/>'])
+
+    # Shared button bar & 3D Tag Preview description panel for ADD TAGS and INSTALLED TAGS browsers
+    lines += _widget(f"{fbase}/forge_browser_button_choose",
+                     [("type", "text"), ("width", 128), ("height", 24),
+                      ("bitmap", "bitmaps/text_button_background"), ("text", "CHOOSE"),
+                      ("font", "ui\\small_ui"), ("color", "#FFFFFFFF"), ("align", "center"), ("text_y", 2)],
+                     ['<on event="a" run="load game menu activated"/>',
+                      '<on event="start" run="load game menu activated"/>',
+                      '<on event="left_mouse" run="mouse emit accept event"/>'])
+    lines += _widget(f"{fbase}/forge_browser_button_back",
+                     [("type", "text"), ("width", 128), ("height", 24),
+                      ("bitmap", "bitmaps/text_button_background"), ("text", "BACK"),
+                      ("font", "ui\\small_ui"), ("color", "#FFFFFFFF"), ("align", "center"), ("text_y", 2)],
+                     ['<on event="a" run="mouse emit back event"/>',
+                      '<on event="start" run="mouse emit back event"/>',
+                      '<on event="left_mouse" run="mouse emit back event"/>'])
+    lines += _widget(f"{fbase}/forge_browser_button_bar",
+                     [("type", "column_list"), ("width", 640), ("height", 28),
+                      ("flags", "pass_unhandled_to_focused_child left_right_tabs_items")],
+                     ['<data input="common button bar update"/>',
+                      f'<child widget="{fbase}/forge_browser_button_choose" x="380" y="1"/>',
+                      f'<child widget="{fbase}/forge_browser_button_back" x="510" y="1"/>'])
+
+    # Right-Side 3D Preview & Info Panel (forge_tag_browser_desc)
+    lines += _widget(f"{fbase}/tag_preview",
+                     [("controller", 1), ("left", 419), ("top", 87), ("width", 140), ("height", 114)], [])
+    lines += _widget(f"{fbase}/forge_tag_right_name",
+                     [("type", "text"), ("controller", 1), ("left", 417), ("top", 204), ("width", 146), ("height", 43),
+                      ("font", "ui\\large_ui"), ("color", "#FF2896FF")], [])
+    lines += _widget(f"{fbase}/forge_tag_right_data",
+                     [("type", "text"), ("controller", 1), ("left", 417), ("top", 258), ("width", 146), ("height", 136),
+                      ("font", "ui\\small_ui"), ("color", "#FF2896FF")], [])
+    lines += _widget(f"{fbase}/forge_tag_browser_desc",
+                     [("left", 406), ("top", 75), ("width", 162), ("height", 326),
+                      ("bitmap", "bitmaps/spinner_list_3_wide_item_background")],
+                     [f'<child widget="{fbase}/tag_preview"/>',
+                      f'<child widget="{fbase}/forge_tag_right_name"/>',
+                      f'<child widget="{fbase}/forge_tag_right_data"/>'])
+
+    # 1c. Option 1 Step A: Map Picker (forge_add_tags_map_screen)
+    lines += _widget(f"{fbase}/forge_add_tags_map_kind_spinner",
+                     [("type", "spinner"), ("width", 238), ("height", 22), ("flags", "left_right_tabs_items"),
+                      ("strings", "CUSTOM SINGLEPLAYER|CUSTOM MULTIPLAYER"),
+                      ("font", "ui\\large_ui"), ("color", "#FF2896FF"), ("align", "center"), ("text_y", 1),
+                      ("header_bitmap", "bitmaps/arrow_sm_left"), ("footer_bitmap", "bitmaps/arrow_sm_right"),
+                      ("header_bounds", "7 -6 19 0"), ("footer_bounds", "7 238 19 244")],
+                     ['<on event="left_mouse" run="mouse spinner 1wide click"/>'])
+    lines += _widget(f"{fbase}/forge_add_tags_map_kind_row",
+                     [("width", 256), ("height", 28), ("flags", "pass_unhandled_to_focused_child"),
+                      ("bitmap", "bitmaps/option_bkds_sm"), ("font", "ui\\large_ui"),
+                      ("color", "#FF2896FF"), ("align", "center"), ("text_y", 3)],
+                     [f'<child widget="{fbase}/forge_add_tags_map_kind_spinner" x="9" y="2"/>'])
+    lines += _widget(f"{fbase}/forge_add_tags_map_list",
+                     [("type", "column_list"), ("width", 640), ("height", 480),
+                      ("flags", "pass_unhandled_to_focused_child up_down_tabs_children"),
+                      ("description", "main_menu/solo_level_select/solo_level_extended_desc")],
+                     ['<data input="load game list update"/>',
+                      '<on event="created" run="load game menu init"/>',
+                      '<on event="custom_activation" run="load game menu activated"/>',
+                      '<on event="b" back="true"/>',
+                      '<on event="back" back="true"/>',
+                      f'<child widget="{fbase}/forge_add_tags_map_kind_row" x="82" y="73"/>',
+                      *[f'<child widget="main_menu/new_select/list_item_{idx}" x="20" y="{103 + 30 * (idx - 1)}"/>'
+                        for idx in range(1, 11)],
+                      f'<child widget="{fbase}/forge_browser_button_bar" y="414"/>'])
+    lines += _widget(f"{fbase}/forge_add_tags_map_screen",
+                     [("width", 640), ("height", 480), ("flags", "pass_unhandled_to_focused_child"),
+                      ("bitmap", "bitmaps/gradient")],
+                     ['<on event="b" back="true"/>',
+                      '<on event="back" back="true"/>',
+                      '<child widget="main_menu/new_select/sel_list_desc_bkd"/>',
+                      f'<child widget="{fbase}/forge_add_tags_map_list"/>',
+                      f'<child widget="{MT}/header_forge"/>'])
+
+    # 1d. Option 1 Step B: Map Tag Browser (forge_add_tags_browser_screen)
+    lines += _widget(f"{fbase}/forge_tag_cat_spinner",
+                     [("type", "spinner"), ("width", 238), ("height", 22), ("flags", "left_right_tabs_items"),
+                      ("strings", "SCENERY|VEHICLES|DEVICES|WEAPONS|EQUIPMENT"),
+                      ("font", "ui\\large_ui"), ("color", "#FF2896FF"), ("align", "center"), ("text_y", 1),
+                      ("header_bitmap", "bitmaps/arrow_sm_left"), ("footer_bitmap", "bitmaps/arrow_sm_right"),
+                      ("header_bounds", "7 -6 19 0"), ("footer_bounds", "7 238 19 244")],
+                     ['<on event="left_mouse" run="mouse spinner 1wide click"/>'])
+    lines += _widget(f"{fbase}/forge_tag_cat_row",
+                     [("width", 256), ("height", 28), ("flags", "pass_unhandled_to_focused_child"),
+                      ("bitmap", "bitmaps/option_bkds_sm"), ("font", "ui\\large_ui"),
+                      ("color", "#FF2896FF"), ("align", "center"), ("text_y", 3)],
+                     [f'<child widget="{fbase}/forge_tag_cat_spinner" x="9" y="2"/>'])
+    lines += _widget(f"{fbase}/forge_add_tags_browser_list",
+                     [("type", "column_list"), ("width", 640), ("height", 480),
+                      ("flags", "pass_unhandled_to_focused_child up_down_tabs_children"),
+                      ("description", f"{fbase}/forge_tag_browser_desc")],
+                     ['<data input="load game list update"/>',
+                      '<on event="created" run="load game menu init"/>',
+                      '<on event="custom_activation" run="load game menu activated"/>',
+                      '<on event="b" back="true"/>',
+                      '<on event="back" back="true"/>',
+                      f'<child widget="{fbase}/forge_tag_cat_row" x="82" y="73"/>',
+                      *[f'<child widget="main_menu/new_select/list_item_{idx}" x="20" y="{103 + 30 * (idx - 1)}"/>'
+                        for idx in range(1, 11)],
+                      f'<child widget="{fbase}/forge_browser_button_bar" y="414"/>'])
+    lines += _widget(f"{fbase}/forge_add_tags_browser_screen",
+                     [("width", 640), ("height", 480), ("flags", "pass_unhandled_to_focused_child"),
+                      ("bitmap", "bitmaps/gradient")],
+                     ['<on event="b" back="true"/>',
+                      '<on event="back" back="true"/>',
+                      '<child widget="main_menu/new_select/sel_list_desc_bkd"/>',
+                      f'<child widget="{fbase}/forge_add_tags_browser_list"/>',
+                      f'<child widget="{MT}/header_forge"/>'])
+
+    # 1e. Option 1 Step C: Custom Tag Name Prompt (forge_name_tag_screen)
+    lines += _widget(f"{fbase}/forge_name_tag_text_box",
+                     [("type", "text"), ("controller", 1), ("width", 280), ("height", 159),
+                      ("bitmap", "bitmaps/alert_bkd"), ("font", "ui\\small_ui"),
+                      ("color", "#FF2896FF"), ("text_x", 9), ("text_y", 36),
+                      ("text", "Enter Forge menu name for tag:")], [])
+    lines += _widget(f"{fbase}/forge_name_tag_backdrop",
+                     [("width", 640), ("height", 480), ("bitmap", "bitmaps/semi_transparent_grey")],
+                     [f'<child widget="{fbase}/forge_name_tag_text_box" x="192" y="176"/>',
+                      '<child widget="error/header_attention" x="201" y="180"/>'])
+    lines += _widget(f"{fbase}/forge_name_tag_input_btn",
+                     [("type", "text"), ("width", 184), ("height", 28),
+                      ("bitmap", f"{MT}/gamemode/forge_name_input_box"),
+                      ("font", "ui\\small_ui"), ("color", "#FFFFFFFF"),
+                      ("text_x", 10), ("text_y", 5)],
+                     ['<on event="a" run="load game menu activated"/>',
+                      '<on event="start" run="load game menu activated"/>',
+                      '<on event="left_mouse" run="mouse emit accept event"/>'])
+    lines += _widget(f"{fbase}/forge_name_tag_btn_confirm",
+                     [("type", "text"), ("width", 128), ("height", 24),
+                      ("bitmap", "bitmaps/text_button_background"), ("text", "CONFIRM"),
+                      ("font", "ui\\small_ui"), ("color", "#FFFFFFFF"), ("align", "center"), ("text_y", 2)],
+                     ['<on event="a" run="port mods save" close="current"/>',
+                      '<on event="start" run="port mods save" close="current"/>',
+                      '<on event="left_mouse" run="mouse emit accept event"/>'])
+    lines += _widget(f"{fbase}/forge_name_tag_btn_back",
+                     [("type", "text"), ("width", 128), ("height", 24),
+                      ("bitmap", "bitmaps/text_button_background"), ("text", "BACK"),
+                      ("font", "ui\\small_ui"), ("color", "#FFFFFFFF"), ("align", "center"), ("text_y", 2)],
+                     ['<on event="a" run="mouse emit back event"/>',
+                      '<on event="start" run="mouse emit back event"/>',
+                      '<on event="left_mouse" run="mouse emit back event"/>'])
+    lines += _widget(f"{fbase}/forge_name_tag_button_bar",
+                     [("type", "column_list"), ("width", 256), ("height", 148),
+                      ("flags", "pass_unhandled_to_focused_child up_down_tabs_items left_right_tabs_items")],
+                     [f'<child widget="{fbase}/forge_name_tag_input_btn" x="48" y="64"/>',
+                      f'<child widget="{fbase}/forge_name_tag_btn_confirm" y="124"/>',
+                      f'<child widget="{fbase}/forge_name_tag_btn_back" x="128" y="124"/>'])
+    lines += _widget(f"{fbase}/forge_name_tag_screen",
+                     [("width", 640), ("height", 480), ("flags", "pass_unhandled_to_focused_child")],
+                     ['<data input="port mods update"/>',
+                      '<on event="created" run="port mods init"/>',
+                      '<on event="b" close="current"/>',
+                      '<on event="back" close="current"/>',
+                      f'<child widget="{fbase}/forge_name_tag_backdrop"/>',
+                      f'<child widget="{fbase}/forge_name_tag_button_bar" x="194" y="185"/>'])
+
+    # 1f. Option 2: INSTALLED TAGS (forge_installed_tags_screen & forge_installed_tag_action_screen)
+    lines += _widget(f"{fbase}/forge_installed_tags_list",
+                     [("type", "column_list"), ("width", 640), ("height", 480),
+                      ("flags", "pass_unhandled_to_focused_child up_down_tabs_children"),
+                      ("description", f"{fbase}/forge_tag_browser_desc")],
+                     ['<data input="load game list update"/>',
+                      '<on event="created" run="load game menu init"/>',
+                      '<on event="custom_activation" run="load game menu activated"/>',
+                      '<on event="b" back="true"/>',
+                      '<on event="back" back="true"/>',
+                      f'<child widget="{fbase}/forge_tag_cat_row" x="82" y="73"/>',
+                      *[f'<child widget="main_menu/new_select/list_item_{idx}" x="20" y="{103 + 30 * (idx - 1)}"/>'
+                        for idx in range(1, 11)],
+                      f'<child widget="{fbase}/forge_browser_button_bar" y="414"/>'])
+    lines += _widget(f"{fbase}/forge_installed_tags_screen",
+                     [("width", 640), ("height", 480), ("flags", "pass_unhandled_to_focused_child"),
+                      ("bitmap", "bitmaps/gradient")],
+                     ['<on event="b" back="true"/>',
+                      '<on event="back" back="true"/>',
+                      '<child widget="main_menu/new_select/sel_list_desc_bkd"/>',
+                      f'<child widget="{fbase}/forge_installed_tags_list"/>',
+                      f'<child widget="{MT}/header_forge"/>'])
+
+    lines += _widget(f"{fbase}/forge_installed_tag_action_text_box",
+                     [("type", "text"), ("controller", 1), ("width", 280), ("height", 159),
+                      ("bitmap", "bitmaps/alert_bkd"), ("font", "ui\\small_ui"),
+                      ("color", "#FF2896FF"), ("text_x", 9), ("text_y", 36),
+                      ("text", "Delete this tag from the cache?")], [])
+    lines += _widget(f"{fbase}/forge_installed_tag_action_backdrop",
+                     [("width", 640), ("height", 480), ("bitmap", "bitmaps/semi_transparent_grey")],
+                     [f'<child widget="{fbase}/forge_installed_tag_action_text_box" x="192" y="176"/>',
+                      '<child widget="error/header_warning" x="201" y="180"/>'])
+    lines += _widget(f"{fbase}/forge_installed_tag_btn_delete",
+                     [("type", "text"), ("width", 128), ("height", 24),
+                      ("bitmap", "bitmaps/text_button_background"), ("text", "DELETE"),
+                      ("font", "ui\\small_ui"), ("color", "#FFFFFFFF"), ("align", "center"), ("text_y", 2)],
+                     ['<on event="a" run="port mods close" close="current"/>',
+                      '<on event="start" run="port mods close" close="current"/>',
+                      '<on event="left_mouse" run="mouse emit accept event"/>'])
+    lines += _widget(f"{fbase}/forge_installed_tag_action_button_bar",
+                     [("type", "column_list"), ("width", 256), ("height", 20),
+                      ("flags", "pass_unhandled_to_focused_child up_down_tabs_items left_right_tabs_items")],
+                     [f'<child widget="{fbase}/forge_installed_tag_btn_delete"/>',
+                      f'<child widget="{fbase}/forge_name_tag_btn_back" x="128"/>'])
+    lines += _widget(f"{fbase}/forge_installed_tag_action_screen",
+                     [("width", 640), ("height", 480), ("flags", "pass_unhandled_to_focused_child")],
+                     ['<data input="port mods update"/>',
+                      '<on event="created" run="port mods init"/>',
+                      '<on event="b" close="current"/>',
+                      '<on event="back" close="current"/>',
+                      f'<child widget="{fbase}/forge_installed_tag_action_backdrop"/>',
+                      f'<child widget="{fbase}/forge_installed_tag_action_button_bar" x="194" y="309"/>'])
+
+    # 1g. Option 3: RESET STOCK TAGS (forge_confirm_reset_stock_screen)
+    lines += _widget(f"{fbase}/forge_reset_stock_text_box",
+                     [("type", "text"), ("controller", 1), ("width", 280), ("height", 159),
+                      ("bitmap", "bitmaps/alert_bkd"), ("font", "ui\\small_ui"),
+                      ("color", "#FF2896FF"), ("text_x", 9), ("text_y", 36),
+                      ("text", "Are you sure you want\r\nto reset the stock tag\r\ncache? All stock tags\r\nwill be cleared.")], [])
+    lines += _widget(f"{fbase}/forge_reset_stock_backdrop",
+                     [("width", 640), ("height", 480), ("bitmap", "bitmaps/semi_transparent_grey")],
+                     [f'<child widget="{fbase}/forge_reset_stock_text_box" x="192" y="176"/>',
+                      '<child widget="error/header_are_you_sure" x="201" y="180"/>'])
+    lines += _widget(f"{fbase}/forge_reset_stock_btn_confirm",
+                     [("type", "text"), ("width", 128), ("height", 24),
+                      ("bitmap", "bitmaps/text_button_background"), ("text", "CONFIRM"),
+                      ("font", "ui\\small_ui"), ("color", "#FFFFFFFF"), ("align", "center"), ("text_y", 2)],
+                     ['<on event="a" run="port mods close" close="current"/>',
+                      '<on event="start" run="port mods close" close="current"/>',
+                      '<on event="left_mouse" run="mouse emit accept event"/>'])
+    lines += _widget(f"{fbase}/forge_reset_stock_button_bar",
+                     [("type", "column_list"), ("width", 256), ("height", 20),
+                      ("flags", "pass_unhandled_to_focused_child up_down_tabs_items left_right_tabs_items")],
+                     [f'<child widget="{fbase}/forge_reset_stock_btn_confirm"/>',
+                      f'<child widget="{fbase}/forge_name_tag_btn_back" x="128"/>'])
+    lines += _widget(f"{fbase}/forge_confirm_reset_stock_screen",
+                     [("width", 640), ("height", 480), ("flags", "pass_unhandled_to_focused_child")],
+                     ['<on event="b" close="current"/>',
+                      '<on event="back" close="current"/>',
+                      f'<child widget="{fbase}/forge_reset_stock_backdrop"/>',
+                      f'<child widget="{fbase}/forge_reset_stock_button_bar" x="194" y="309"/>'])
+
+    # 1h. Option 4: RESET CUSTOM TAGS (forge_confirm_reset_custom_screen)
+    lines += _widget(f"{fbase}/forge_reset_custom_text_box",
+                     [("type", "text"), ("controller", 1), ("width", 280), ("height", 159),
+                      ("bitmap", "bitmaps/alert_bkd"), ("font", "ui\\small_ui"),
+                      ("color", "#FF2896FF"), ("text_x", 9), ("text_y", 36),
+                      ("text", "Are you sure you want\r\nto reset the custom tag\r\ncache? All custom tags\r\nwill be cleared.")], [])
+    lines += _widget(f"{fbase}/forge_reset_custom_backdrop",
+                     [("width", 640), ("height", 480), ("bitmap", "bitmaps/semi_transparent_grey")],
+                     [f'<child widget="{fbase}/forge_reset_custom_text_box" x="192" y="176"/>',
+                      '<child widget="error/header_are_you_sure" x="201" y="180"/>'])
+    lines += _widget(f"{fbase}/forge_reset_custom_btn_confirm",
+                     [("type", "text"), ("width", 128), ("height", 24),
+                      ("bitmap", "bitmaps/text_button_background"), ("text", "CONFIRM"),
+                      ("font", "ui\\small_ui"), ("color", "#FFFFFFFF"), ("align", "center"), ("text_y", 2)],
+                     ['<on event="a" run="port mods close" close="current"/>',
+                      '<on event="start" run="port mods close" close="current"/>',
+                      '<on event="left_mouse" run="mouse emit accept event"/>'])
+    lines += _widget(f"{fbase}/forge_reset_custom_button_bar",
+                     [("type", "column_list"), ("width", 256), ("height", 20),
+                      ("flags", "pass_unhandled_to_focused_child up_down_tabs_items left_right_tabs_items")],
+                     [f'<child widget="{fbase}/forge_reset_custom_btn_confirm"/>',
+                      f'<child widget="{fbase}/forge_name_tag_btn_back" x="128"/>'])
+    lines += _widget(f"{fbase}/forge_confirm_reset_custom_screen",
+                     [("width", 640), ("height", 480), ("flags", "pass_unhandled_to_focused_child")],
+                     ['<on event="b" close="current"/>',
+                      '<on event="back" close="current"/>',
+                      f'<child widget="{fbase}/forge_reset_custom_backdrop"/>',
+                      f'<child widget="{fbase}/forge_reset_custom_button_bar" x="194" y="309"/>'])
+
+    # 1i. Option 5: SNAP POINTS (forge_snap_points_screen)
+    lines += _widget(f"{fbase}/forge_snap_cat_spinner",
+                     [("type", "spinner"), ("width", 238), ("height", 22), ("flags", "left_right_tabs_items"),
+                      ("strings", "SCENERY|DOORS|CUSTOM SCENERY|CUSTOM DOORS"),
+                      ("font", "ui\\large_ui"), ("color", "#FF2896FF"), ("align", "center"), ("text_y", 1),
+                      ("header_bitmap", "bitmaps/arrow_sm_left"), ("footer_bitmap", "bitmaps/arrow_sm_right"),
+                      ("header_bounds", "7 -6 19 0"), ("footer_bounds", "7 238 19 244")],
+                     ['<on event="left_mouse" run="mouse spinner 1wide click"/>'])
+    lines += _widget(f"{fbase}/forge_snap_cat_row",
+                     [("width", 256), ("height", 28), ("flags", "pass_unhandled_to_focused_child"),
+                      ("bitmap", "bitmaps/option_bkds_sm"), ("font", "ui\\large_ui"),
+                      ("color", "#FF2896FF"), ("align", "center"), ("text_y", 3)],
+                     [f'<child widget="{fbase}/forge_snap_cat_spinner" x="9" y="2"/>'])
+    lines += _widget(f"{fbase}/forge_snap_points_list",
+                     [("type", "column_list"), ("width", 640), ("height", 480),
+                      ("flags", "pass_unhandled_to_focused_child up_down_tabs_children"),
+                      ("description", f"{fbase}/forge_tag_browser_desc")],
+                     ['<data input="load game list update"/>',
+                      '<on event="created" run="load game menu init"/>',
+                      '<on event="custom_activation" run="load game menu activated"/>',
+                      '<on event="b" run="port map list back"/>',
+                      '<on event="back" run="port map list back"/>',
+                      f'<child widget="{fbase}/forge_snap_cat_row" x="82" y="73"/>',
+                      *[f'<child widget="main_menu/new_select/list_item_{idx}" x="20" y="{103 + 30 * (idx - 1)}"/>'
+                        for idx in range(1, 11)],
+                      f'<child widget="{fbase}/forge_browser_button_bar" y="414"/>'])
+    lines += _widget(f"{fbase}/forge_snap_points_screen",
+                     [("width", 640), ("height", 480), ("flags", "pass_unhandled_to_focused_child"),
+                      ("bitmap", "bitmaps/gradient")],
+                     ['<on event="b" run="port map list back"/>',
+                      '<on event="back" run="port map list back"/>',
+                      '<child widget="main_menu/new_select/sel_list_desc_bkd"/>',
+                      f'<child widget="{fbase}/forge_snap_points_list"/>',
+                      f'<child widget="{MT}/header_forge"/>'])
 
     # 2. Forge Multiplayer Type Select Screen
     lines += _widget(f"{fbase}/forge_type_edit_maps_item",
@@ -3143,6 +3455,28 @@ def generate_firefight_menu_assets() -> None:
     dedi_server_png = ce_dir / "port/gamemode/dedi_server_logo__0.png"
     _render_locked_mode_emblem_pil("dedi_server", scale=4).save(dedi_server_png, optimize=True)
 
+    # Render 184x28 rounded input box bitmaps for forge_name_tag_input_btn
+    from PIL import Image, ImageDraw
+    for frame_idx, (border_col, fill_col) in enumerate([
+        ((40, 150, 255, 190), (8, 22, 48, 225)),
+        ((130, 225, 255, 255), (14, 38, 78, 240)),
+    ]):
+        scale = 4
+        w, h = 184 * scale, 28 * scale
+        im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        dr = ImageDraw.Draw(im)
+        dr.rounded_rectangle(
+            [2 * scale, 2 * scale, w - 2 * scale - 1, h - 2 * scale - 1],
+            radius=6 * scale,
+            fill=fill_col,
+            outline=border_col,
+            width=2 * scale,
+        )
+        im_out = im.resize((184, 28), Image.Resampling.LANCZOS)
+        box_png = ce_dir / f"port/gamemode/name_input_box__{frame_idx}.png"
+        box_png.parent.mkdir(parents=True, exist_ok=True)
+        im_out.save(box_png, optimize=True)
+
     # 3. Update bitmaps.xml
     bitmaps_xml_path = ce_dir / "bitmaps.xml"
     bitmaps_text = bitmaps_xml_path.read_text(encoding="utf-8")
@@ -3201,6 +3535,10 @@ def generate_firefight_menu_assets() -> None:
         f'\t<bitmap name="{MT}/service_record/header_service_record">',
         f'\t\t<frame png="ce/port/{MT}/service_record/header_service_record.png" width="512" height="64"/>',
         "\t</bitmap>",
+        f'\t<bitmap name="{MT}/gamemode/forge_name_input_box">',
+        '\t\t<frame png="ce/port/gamemode/name_input_box__0.png" width="184" height="28"/>',
+        '\t\t<frame png="ce/port/gamemode/name_input_box__1.png" width="184" height="28"/>',
+        "\t</bitmap>",
     ])
     # Remove any previous copies of those blocks before re-inserting cleanly
     for bm_name in (
@@ -3215,6 +3553,7 @@ def generate_firefight_menu_assets() -> None:
         f"{MT}/gamemode/header_gamemode",
         f"{MT}/gamemode/gamemode_options",
         f"{MT}/service_record/header_service_record",
+        f"{MT}/gamemode/forge_name_input_box",
     ):
         bitmaps_text = re.sub(
             rf'\t<bitmap name="{re.escape(bm_name)}">.*?\t</bitmap>\n?',
@@ -3330,6 +3669,12 @@ def generate_firefight_menu_assets() -> None:
                 '\t\t<string text="Host a game on your LAN\\nonly." map="4"/>\n'
                 '\t\t<string text="Play on this computer alone:\\nsplit screen, and bots in\\nSlayer games."/>\n',
             )
+        if 'Browse and load your saved' not in strings_text:
+            strings_text = strings_text.replace(
+                '\t\t<string text="Set all the attributes for your \\nmultiplayer gametypes and\\nkeep them for future use."',
+                '\t\t<string text="Browse and load your saved\\nForge and custom maps."/>\n'
+                '\t\t<string text="Set all the attributes for your \\nmultiplayer gametypes and\\nkeep them for future use."',
+            )
         strings_path.write_text(strings_text, encoding="utf-8")
 
     # 7. Ensure all generated XMLs and PNGs are registered in port/assets/menus/menus.json["files"]
@@ -3349,6 +3694,8 @@ def generate_firefight_menu_assets() -> None:
             "ce/port/gamemode/theater_logo__0.png",
             "ce/port/gamemode/creation_hub_logo__0.png",
             "ce/port/gamemode/dedi_server_logo__0.png",
+            "ce/port/gamemode/name_input_box__0.png",
+            "ce/port/gamemode/name_input_box__1.png",
             f"ce/port/{MT}/server_settings/bots_options/header_bots_options.png",
             f"ce/port/{MT}/header_standard.png",
             f"ce/port/{MT}/header_ranked.png",

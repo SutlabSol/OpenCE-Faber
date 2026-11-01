@@ -39,8 +39,8 @@ Version 1 bundles held no bitmap pixels; they are refused.
 
 /* ---------- constants */
 
-/* "OCEB" */
-#define TAG_BUNDLE_SIGNATURE 0x4245434FUL
+/* "FABB" */
+#define TAG_BUNDLE_SIGNATURE 0x42424146UL
 #define TAG_BUNDLE_VERSION 2
 
 enum

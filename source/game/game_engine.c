@@ -8446,6 +8446,8 @@ short game_engine_friendly_damage(
 			return _friendly_damage_none;
 		friendly_fire = game->variant_options.friendly_fire;
 	}
+	else if (firefight_active())
+		return _friendly_damage_all;
 	else if (!game_engine || !global_variant.universal_variant.teams)
 		return _friendly_damage_all;
 	else

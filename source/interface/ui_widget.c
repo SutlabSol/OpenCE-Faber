@@ -7264,6 +7264,8 @@ static void ui_widgets_process_mouse(
 	return;
 }
 
+extern struct bitmap_data *forge_tag_preview_get_bitmap(void);
+
 static void widget_instance_render_recursive(
 	struct widget_instance *widget,
 	rectangle2d *clip_rect,
@@ -7311,8 +7313,13 @@ static void widget_instance_render_recursive(
 	is (port/linux/game/tag_preview.c) */
 	frame_index = widget->animation.current_frame_index;
 	custom_edition_picture = custom_edition_maps_picture(definition->background_bitmap.index, &frame_index);
-	tag_preview_picture_shown = !custom_edition_picture && widget->name && !strcmp(widget->name, "tag_preview") ?
-		tag_preview_picture() : NULL;
+	tag_preview_picture_shown = NULL;
+	if (!custom_edition_picture && widget->name && !strcmp(widget->name, "tag_preview"))
+	{
+		tag_preview_picture_shown = forge_tag_preview_get_bitmap();
+		if (!tag_preview_picture_shown)
+			tag_preview_picture_shown = tag_preview_picture();
+	}
 	if (tag_preview_picture_shown)
 		custom_edition_picture = tag_preview_picture_shown;
 	bitmap = custom_edition_picture ? custom_edition_picture : bitmap_group_get_bitmap_from_sequence(

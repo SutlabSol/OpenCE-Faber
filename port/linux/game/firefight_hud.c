@@ -53,6 +53,10 @@ Halo 1 CE-styled Firefight HUD module:
 unsigned long system_milliseconds(void);
 void draw_quad(rectangle2d const *bounds, pixel32 color);
 struct bitmap_data *bitmap_group_try_and_get_bitmap(long bitmap_group_index, short bitmap_index);
+short find_nav_point(char const *name);
+short hud_get_nav_point_render_type(short local_player_index, real_point3d const *head, real_point3d const *position, long reference_object_index);
+void custom_render_nav_point(short local_player_index, real_point3d const *position_pointer, short nav_index, short waypoint_type);
+void render_interpolation_object_point(long object_index, real_point3d *point);
 
 /* ---------- constants */
 
@@ -1120,7 +1124,13 @@ void firefight_hud_draw(void)
 	/* 5. 3D->2D World-to-Screen Navpoints for Stragglers (<= 3 enemies left) & Resupply Drops */
 	if (ff_state.straggler_navpoints_active && ff_state.enemies_alive > 0 && ff_state.enemies_alive <= FIREFIGHT_STRAGGLER_THRESHOLD)
 	{
+		short local_player_index = render.local_player_index;
+		short red_arrow_index = find_nav_point("default_red");
 		short i;
+
+		if (red_arrow_index == NONE && hud_globals && hud_globals->waypoint.arrows.count > 0)
+			red_arrow_index = (hud_globals->waypoint.arrows.count > 1) ? 1 : 0;
+
 		for (i = 0; i < FIREFIGHT_MAX_TRACKED_ENEMIES; i++)
 		{
 			long unit_index = ff_state.tracked_enemy_units[i];
@@ -1134,10 +1144,28 @@ void firefight_hud_draw(void)
 				continue;
 
 			nav_pos = unit->object.bounding_sphere_center;
-			nav_pos.z += 0.45f;
-			draw_world_navpoint(
-				font_index, line_height, scale,
-				&nav_pos, "HOSTILE", FF_HUD_WARN_EDGE, &red);
+			render_interpolation_object_point(unit_index, &nav_pos);
+			nav_pos.z += unit->object.bounding_sphere_radius * 0.65f + 0.15f;
+
+			if (local_player_index != NONE && red_arrow_index != NONE)
+			{
+				short waypoint_type = hud_get_nav_point_render_type(
+					local_player_index,
+					&render.camera.position,
+					&nav_pos,
+					unit_index);
+				custom_render_nav_point(
+					local_player_index,
+					&nav_pos,
+					red_arrow_index,
+					waypoint_type);
+			}
+			else
+			{
+				draw_world_navpoint(
+					font_index, line_height, scale,
+					&nav_pos, "HOSTILE", FF_HUD_WARN_EDGE, &red);
+			}
 		}
 	}
 
@@ -1333,6 +1361,8 @@ static boolean mcc_point_in_star(real nx, real ny, real cx, real cy, real radius
 }
 
 #define FF_ICON_TEX_DIM 32
+#define FF_ICON_HI_DIM 128
+#define FF_ICON_HI_MIPS 4
 #define FF_ICON_GRID_DIM 16
 #define FF_ICON_MAX_RECTS 128
 
@@ -1346,9 +1376,475 @@ struct ff_hw_icon_entry
 static struct ff_hw_icon_entry s_hw_icon_cache[64];
 static int s_hw_icon_next = 0;
 
+static void ff_downsample_2x(pixel32 const *src, int src_dim, pixel32 *dst)
+{
+	int dst_dim = src_dim >> 1;
+	int y, x;
+
+	for (y = 0; y < dst_dim; y++)
+	{
+		for (x = 0; x < dst_dim; x++)
+		{
+			pixel32 c00 = src[(y * 2) * src_dim + (x * 2)];
+			pixel32 c01 = src[(y * 2) * src_dim + (x * 2 + 1)];
+			pixel32 c10 = src[(y * 2 + 1) * src_dim + (x * 2)];
+			pixel32 c11 = src[(y * 2 + 1) * src_dim + (x * 2 + 1)];
+			unsigned long a00 = (c00 >> 24) & 0xFF;
+			unsigned long a01 = (c01 >> 24) & 0xFF;
+			unsigned long a10 = (c10 >> 24) & 0xFF;
+			unsigned long a11 = (c11 >> 24) & 0xFF;
+			unsigned long a_sum = a00 + a01 + a10 + a11;
+
+			if (a_sum == 0)
+			{
+				dst[y * dst_dim + x] = 0;
+			}
+			else
+			{
+				unsigned long r = (((c00 >> 16) & 0xFF) * a00 + ((c01 >> 16) & 0xFF) * a01 +
+					((c10 >> 16) & 0xFF) * a10 + ((c11 >> 16) & 0xFF) * a11 + (a_sum >> 1)) / a_sum;
+				unsigned long g = (((c00 >> 8) & 0xFF) * a00 + ((c01 >> 8) & 0xFF) * a01 +
+					((c10 >> 8) & 0xFF) * a10 + ((c11 >> 8) & 0xFF) * a11 + (a_sum >> 1)) / a_sum;
+				unsigned long b = ((c00 & 0xFF) * a00 + (c01 & 0xFF) * a01 +
+					(c10 & 0xFF) * a10 + (c11 & 0xFF) * a11 + (a_sum >> 1)) / a_sum;
+				unsigned long a = (a_sum + 2) >> 2;
+				if (r > 255) r = 255;
+				if (g > 255) g = 255;
+				if (b > 255) b = 255;
+				if (a > 255) a = 255;
+				dst[y * dst_dim + x] = (pixel32)((a << 24) | (r << 16) | (g << 8) | b);
+			}
+		}
+	}
+}
+
+static long ff_color_dist_argb(pixel32 c1, pixel32 c2)
+{
+	long a1 = (long)((c1 >> 24) & 0xFF);
+	long a2 = (long)((c2 >> 24) & 0xFF);
+	long r1 = ((long)((c1 >> 16) & 0xFF) * a1) / 255;
+	long g1 = ((long)((c1 >> 8) & 0xFF) * a1) / 255;
+	long b1 = ((long)(c1 & 0xFF) * a1) / 255;
+	long r2 = ((long)((c2 >> 16) & 0xFF) * a2) / 255;
+	long g2 = ((long)((c2 >> 8) & 0xFF) * a2) / 255;
+	long b2 = ((long)(c2 & 0xFF) * a2) / 255;
+	long dr = r1 - r2, dg = g1 - g2, db = b1 - b2, da = a1 - a2;
+	return dr * dr * 2 + dg * dg * 4 + db * db + da * da * 2;
+}
+
+static pixel32 ff_lerp_premul_argb(pixel32 c1, pixel32 c2, real t)
+{
+	real a1 = (real)((c1 >> 24) & 0xFF);
+	real a2 = (real)((c2 >> 24) & 0xFF);
+	real a = a1 + (a2 - a1) * t;
+	long ai = (long)(a + 0.5f);
+	real r1, g1, b1, r2, g2, b2;
+	long r, g, b;
+
+	if (ai <= 0)
+		return 0;
+	r1 = (real)((c1 >> 16) & 0xFF) * a1;
+	g1 = (real)((c1 >> 8) & 0xFF) * a1;
+	b1 = (real)(c1 & 0xFF) * a1;
+	r2 = (real)((c2 >> 16) & 0xFF) * a2;
+	g2 = (real)((c2 >> 8) & 0xFF) * a2;
+	b2 = (real)(c2 & 0xFF) * a2;
+	r = PIN((long)((r1 + (r2 - r1) * t) / a + 0.5f), 0L, 255L);
+	g = PIN((long)((g1 + (g2 - g1) * t) / a + 0.5f), 0L, 255L);
+	b = PIN((long)((b1 + (b2 - b1) * t) / a + 0.5f), 0L, 255L);
+	ai = PIN(ai, 0L, 255L);
+	return (pixel32)(((unsigned long)ai << 24) | ((unsigned long)r << 16) | ((unsigned long)g << 8) | (unsigned long)b);
+}
+
+static pixel32 ff_grid_get_clamped(pixel32 const *grid, int w, int h, int x, int y)
+{
+	if (x < 0) x = 0;
+	else if (x >= w) x = w - 1;
+	if (y < 0) y = 0;
+	else if (y >= h) y = h - 1;
+	return grid[y * w + x];
+}
+
+static void ff_xbr_2x(pixel32 const *src, int w, int h, pixel32 *dst)
+{
+	int out_w = w * 2;
+	int y, x;
+
+	for (y = 0; y < h; y++)
+	{
+		for (x = 0; x < w; x++)
+		{
+			pixel32 E = ff_grid_get_clamped(src, w, h, x, y);
+			pixel32 B = ff_grid_get_clamped(src, w, h, x, y - 1);
+			pixel32 D = ff_grid_get_clamped(src, w, h, x - 1, y);
+			pixel32 F = ff_grid_get_clamped(src, w, h, x + 1, y);
+			pixel32 H = ff_grid_get_clamped(src, w, h, x, y + 1);
+			pixel32 A = ff_grid_get_clamped(src, w, h, x - 1, y - 1);
+			pixel32 C = ff_grid_get_clamped(src, w, h, x + 1, y - 1);
+			pixel32 G = ff_grid_get_clamped(src, w, h, x - 1, y + 1);
+			pixel32 I = ff_grid_get_clamped(src, w, h, x + 1, y + 1);
+			pixel32 e0 = E, e1 = E, e2 = E, e3 = E;
+
+			if (ff_color_dist_argb(B, H) > 400 && ff_color_dist_argb(D, F) > 400)
+			{
+				if (ff_color_dist_argb(D, B) < ff_color_dist_argb(E, A) &&
+					ff_color_dist_argb(E, D) > 100 && ff_color_dist_argb(E, B) > 100)
+					e0 = ff_lerp_premul_argb(E, ff_lerp_premul_argb(D, B, 0.5f), 0.75f);
+				if (ff_color_dist_argb(B, F) < ff_color_dist_argb(E, C) &&
+					ff_color_dist_argb(E, B) > 100 && ff_color_dist_argb(E, F) > 100)
+					e1 = ff_lerp_premul_argb(E, ff_lerp_premul_argb(B, F, 0.5f), 0.75f);
+				if (ff_color_dist_argb(D, H) < ff_color_dist_argb(E, G) &&
+					ff_color_dist_argb(E, D) > 100 && ff_color_dist_argb(E, H) > 100)
+					e2 = ff_lerp_premul_argb(E, ff_lerp_premul_argb(D, H, 0.5f), 0.75f);
+				if (ff_color_dist_argb(F, H) < ff_color_dist_argb(E, I) &&
+					ff_color_dist_argb(E, F) > 100 && ff_color_dist_argb(E, H) > 100)
+					e3 = ff_lerp_premul_argb(E, ff_lerp_premul_argb(F, H, 0.5f), 0.75f);
+			}
+			dst[(y * 2) * out_w + (x * 2)] = e0;
+			dst[(y * 2) * out_w + (x * 2 + 1)] = e1;
+			dst[(y * 2 + 1) * out_w + (x * 2)] = e2;
+			dst[(y * 2 + 1) * out_w + (x * 2 + 1)] = e3;
+		}
+	}
+}
+
+static void ff_smooth_icon_128(pixel32 const *src, pixel32 *dst)
+{
+	static int const k_dy[9] = { 0, -1, 1, 0, 0, -1, -1, 1, 1 };
+	static int const k_dx[9] = { 0, 0, 0, -1, 1, -1, 1, -1, 1 };
+	static real const k_w[9] = { 4.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.5f, 0.5f, 0.5f, 0.5f };
+	int y, x, k;
+
+	for (y = 0; y < FF_ICON_HI_DIM; y++)
+	{
+		for (x = 0; x < FF_ICON_HI_DIM; x++)
+		{
+			real r_sum = 0.0f, g_sum = 0.0f, b_sum = 0.0f, a_sum = 0.0f, w_sum = 0.0f;
+			real a_avg;
+
+			for (k = 0; k < 9; k++)
+			{
+				pixel32 nc = ff_grid_get_clamped(src, FF_ICON_HI_DIM, FF_ICON_HI_DIM, x + k_dx[k], y + k_dy[k]);
+				real na = (real)((nc >> 24) & 0xFF) / 255.0f;
+				real w = k_w[k];
+				r_sum += (real)((nc >> 16) & 0xFF) * na * w;
+				g_sum += (real)((nc >> 8) & 0xFF) * na * w;
+				b_sum += (real)(nc & 0xFF) * na * w;
+				a_sum += (real)((nc >> 24) & 0xFF) * w;
+				w_sum += w;
+			}
+			a_avg = a_sum / w_sum;
+			if (a_avg < 4.0f)
+			{
+				dst[y * FF_ICON_HI_DIM + x] = 0;
+			}
+			else
+			{
+				real a_norm = a_avg / 255.0f;
+				long r = PIN((long)((r_sum / w_sum) / a_norm + 0.5f), 0L, 255L);
+				long g = PIN((long)((g_sum / w_sum) / a_norm + 0.5f), 0L, 255L);
+				long b = PIN((long)((b_sum / w_sum) / a_norm + 0.5f), 0L, 255L);
+				long a = PIN((long)(a_avg + 0.5f), 0L, 255L);
+				dst[y * FF_ICON_HI_DIM + x] = (pixel32)(((unsigned long)a << 24) |
+					((unsigned long)r << 16) | ((unsigned long)g << 8) | (unsigned long)b);
+			}
+		}
+	}
+}
+
+struct ff_metal_palette
+{
+	unsigned char light[3];
+	unsigned char mid[3];
+	unsigned char dark[3];
+};
+
+static struct ff_metal_palette const s_ff_metal_bronze = { { 248, 188, 128 }, { 198, 122, 58 }, { 108, 56, 22 } };
+static struct ff_metal_palette const s_ff_metal_silver = { { 248, 252, 255 }, { 186, 198, 212 }, { 98, 110, 126 } };
+static struct ff_metal_palette const s_ff_metal_gold   = { { 255, 242, 146 }, { 228, 178, 52 },  { 132, 88, 16 } };
+static struct ff_metal_palette const s_ff_metal_cyan   = { { 195, 254, 255 }, { 68, 212, 238 },  { 22, 108, 138 } };
+
+struct ff_emblem_sdf_layer
+{
+	real sdf;
+	struct ff_metal_palette const *metal;
+};
+
+static real ff_sd_segment(real px, real py, real ax, real ay, real bx, real by)
+{
+	real vx = bx - ax, vy = by - ay;
+	real wx = px - ax, wy = py - ay;
+	real c1 = vx * wx + vy * wy;
+	real c2 = vx * vx + vy * vy;
+	real t = (c2 > 1e-8f) ? PIN(c1 / c2, 0.0f, 1.0f) : 0.0f;
+	real dx = px - (ax + t * vx);
+	real dy = py - (ay + t * vy);
+	return square_root(dx * dx + dy * dy);
+}
+
+static real ff_eval_chevron_sdf(real ex, real ey, real cy, real arm_x, real drop_y, real thick, boolean upward)
+{
+	real ax = (ex >= 0.0f) ? ex : -ex;
+	real d = upward
+		? ff_sd_segment(ax, ey, 0.0f, cy - drop_y, arm_x, cy)
+		: ff_sd_segment(ax, ey, 0.0f, cy + drop_y, arm_x, cy);
+	return thick - d;
+}
+
+static real ff_eval_diamond_sdf(real ex, real ey, real cy, real rad, real hole_rad)
+{
+	real ax = (ex >= 0.0f) ? ex : -ex;
+	real ay = (ey - cy >= 0.0f) ? (ey - cy) : -(ey - cy);
+	real d_outer = (rad - (ax + ay)) * 0.7071f;
+	if (hole_rad > 0.0f)
+	{
+		real d_inner = ((ax + ay) - hole_rad) * 0.7071f;
+		return MIN(d_outer, d_inner);
+	}
+	return d_outer;
+}
+
+static int ff_eval_mcc_rank_emblem(short r, real ex, real ey, struct ff_emblem_sdf_layer out_layers[4])
+{
+	int n = 0;
+
+	if (r == 0)
+	{
+		out_layers[n].sdf = ff_eval_diamond_sdf(ex, ey, 0.0f, 0.145f, 0.048f);
+		out_layers[n++].metal = &s_ff_metal_silver;
+	}
+	else if (r == 1)
+	{
+		out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, 0.01f, 0.165f, 0.135f, 0.046f, FALSE);
+		out_layers[n++].metal = &s_ff_metal_bronze;
+		out_layers[n].sdf = ff_eval_diamond_sdf(ex, ey, -0.055f, 0.125f, 0.042f);
+		out_layers[n++].metal = &s_ff_metal_silver;
+	}
+	else if (r >= 2 && r <= 4)
+	{
+		if (r == 2)
+		{
+			out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, -0.04f, 0.185f, 0.145f, 0.054f, FALSE);
+			out_layers[n++].metal = &s_ff_metal_bronze;
+		}
+		else if (r == 3)
+		{
+			out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, -0.10f, 0.185f, 0.145f, 0.048f, FALSE);
+			out_layers[n++].metal = &s_ff_metal_bronze;
+			out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, 0.03f, 0.185f, 0.145f, 0.048f, FALSE);
+			out_layers[n++].metal = &s_ff_metal_bronze;
+		}
+		else
+		{
+			out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, -0.075f, 0.185f, 0.145f, 0.046f, FALSE);
+			out_layers[n++].metal = &s_ff_metal_bronze;
+			out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, 0.05f, 0.185f, 0.145f, 0.046f, FALSE);
+			out_layers[n++].metal = &s_ff_metal_bronze;
+			out_layers[n].sdf = ff_eval_diamond_sdf(ex, ey, -0.135f, 0.075f, 0.0f);
+			out_layers[n++].metal = &s_ff_metal_bronze;
+		}
+	}
+	else if (r >= 5 && r <= 7)
+	{
+		if (r == 5)
+		{
+			out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, -0.04f, 0.185f, 0.145f, 0.054f, FALSE);
+			out_layers[n++].metal = &s_ff_metal_silver;
+		}
+		else if (r == 6)
+		{
+			out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, -0.10f, 0.185f, 0.145f, 0.048f, FALSE);
+			out_layers[n++].metal = &s_ff_metal_silver;
+			out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, 0.03f, 0.185f, 0.145f, 0.048f, FALSE);
+			out_layers[n++].metal = &s_ff_metal_silver;
+		}
+		else
+		{
+			out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, -0.075f, 0.185f, 0.145f, 0.046f, FALSE);
+			out_layers[n++].metal = &s_ff_metal_silver;
+			out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, 0.05f, 0.185f, 0.145f, 0.046f, FALSE);
+			out_layers[n++].metal = &s_ff_metal_silver;
+			out_layers[n].sdf = ff_eval_diamond_sdf(ex, ey, -0.135f, 0.075f, 0.0f);
+			out_layers[n++].metal = &s_ff_metal_silver;
+		}
+	}
+	else if (r == 8)
+	{
+		out_layers[n].sdf = ff_eval_diamond_sdf(ex, ey, 0.0f, 0.21f, 0.068f);
+		out_layers[n++].metal = &s_ff_metal_silver;
+	}
+	else if (r == 9)
+	{
+		out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, 0.05f, 0.175f, 0.14f, 0.046f, FALSE);
+		out_layers[n++].metal = &s_ff_metal_silver;
+		out_layers[n].sdf = ff_eval_diamond_sdf(ex, ey, -0.045f, 0.185f, 0.058f);
+		out_layers[n++].metal = &s_ff_metal_silver;
+	}
+	else if (r == 10)
+	{
+		out_layers[n].sdf = ff_eval_diamond_sdf(ex, ey, 0.065f, 0.125f, 0.0f);
+		out_layers[n++].metal = &s_ff_metal_bronze;
+		out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, -0.07f, 0.185f, 0.145f, 0.050f, FALSE);
+		out_layers[n++].metal = &s_ff_metal_silver;
+	}
+	else if (r == 11)
+	{
+		out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, 0.01f, 0.175f, 0.135f, 0.043f, FALSE);
+		out_layers[n++].metal = &s_ff_metal_silver;
+		out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, 0.115f, 0.175f, 0.135f, 0.043f, FALSE);
+		out_layers[n++].metal = &s_ff_metal_silver;
+		out_layers[n].sdf = ff_eval_diamond_sdf(ex, ey, -0.075f, 0.175f, 0.055f);
+		out_layers[n++].metal = &s_ff_metal_silver;
+	}
+	else if (r >= 12 && r <= 14)
+	{
+		if (r == 12)
+		{
+			out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, -0.04f, 0.185f, 0.145f, 0.054f, FALSE);
+			out_layers[n++].metal = &s_ff_metal_gold;
+		}
+		else if (r == 13)
+		{
+			out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, -0.10f, 0.185f, 0.145f, 0.048f, FALSE);
+			out_layers[n++].metal = &s_ff_metal_gold;
+			out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, 0.03f, 0.185f, 0.145f, 0.048f, FALSE);
+			out_layers[n++].metal = &s_ff_metal_gold;
+		}
+		else
+		{
+			out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, -0.075f, 0.185f, 0.145f, 0.046f, FALSE);
+			out_layers[n++].metal = &s_ff_metal_gold;
+			out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, 0.05f, 0.185f, 0.145f, 0.046f, FALSE);
+			out_layers[n++].metal = &s_ff_metal_gold;
+			out_layers[n].sdf = ff_eval_diamond_sdf(ex, ey, -0.135f, 0.075f, 0.0f);
+			out_layers[n++].metal = &s_ff_metal_gold;
+		}
+	}
+	else if (r == 15)
+	{
+		out_layers[n].sdf = ff_eval_diamond_sdf(ex, ey, 0.0f, 0.21f, 0.068f);
+		out_layers[n++].metal = &s_ff_metal_gold;
+	}
+	else if (r == 16)
+	{
+		out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, 0.05f, 0.175f, 0.14f, 0.046f, FALSE);
+		out_layers[n++].metal = &s_ff_metal_gold;
+		out_layers[n].sdf = ff_eval_diamond_sdf(ex, ey, -0.045f, 0.185f, 0.058f);
+		out_layers[n++].metal = &s_ff_metal_gold;
+	}
+	else if (r == 17)
+	{
+		out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, 0.01f, 0.175f, 0.135f, 0.043f, FALSE);
+		out_layers[n++].metal = &s_ff_metal_gold;
+		out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, 0.115f, 0.175f, 0.135f, 0.043f, FALSE);
+		out_layers[n++].metal = &s_ff_metal_gold;
+		out_layers[n].sdf = ff_eval_diamond_sdf(ex, ey, -0.075f, 0.175f, 0.055f);
+		out_layers[n++].metal = &s_ff_metal_gold;
+	}
+	else if (r == 18)
+	{
+		out_layers[n].sdf = ff_eval_diamond_sdf(ex, ey, 0.07f, 0.125f, 0.0f);
+		out_layers[n++].metal = &s_ff_metal_gold;
+		out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, -0.06f, 0.185f, 0.14f, 0.048f, FALSE);
+		out_layers[n++].metal = &s_ff_metal_gold;
+		out_layers[n].sdf = ff_eval_diamond_sdf(ex, ey, -0.125f, 0.068f, 0.0f);
+		out_layers[n++].metal = &s_ff_metal_gold;
+	}
+	else if (r == 19)
+	{
+		out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, -0.06f, 0.175f, 0.135f, 0.042f, TRUE);
+		out_layers[n++].metal = &s_ff_metal_gold;
+		out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, 0.06f, 0.175f, 0.135f, 0.042f, FALSE);
+		out_layers[n++].metal = &s_ff_metal_gold;
+		out_layers[n].sdf = ff_eval_diamond_sdf(ex, ey, 0.0f, 0.185f, 0.058f);
+		out_layers[n++].metal = &s_ff_metal_gold;
+	}
+	else if (r >= 20 && r <= 22)
+	{
+		real cy = (r == 21) ? -0.03f : 0.0f;
+		if (r == 21)
+		{
+			out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, 0.06f, 0.18f, 0.14f, 0.045f, FALSE);
+			out_layers[n++].metal = &s_ff_metal_gold;
+		}
+		else if (r == 22)
+		{
+			out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, -0.06f, 0.18f, 0.14f, 0.044f, TRUE);
+			out_layers[n++].metal = &s_ff_metal_gold;
+			out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, 0.06f, 0.18f, 0.14f, 0.044f, FALSE);
+			out_layers[n++].metal = &s_ff_metal_gold;
+		}
+		out_layers[n].sdf = ff_eval_diamond_sdf(ex, ey, cy, 0.21f, 0.0f);
+		out_layers[n++].metal = &s_ff_metal_gold;
+		out_layers[n].sdf = ff_eval_diamond_sdf(ex, ey, cy, 0.11f, 0.0f);
+		out_layers[n++].metal = &s_ff_metal_cyan;
+	}
+	else if (r == 23)
+	{
+		out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, 0.08f, 0.17f, 0.11f, 0.042f, TRUE);
+		out_layers[n++].metal = &s_ff_metal_cyan;
+		out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, -0.06f, 0.18f, 0.135f, 0.048f, FALSE);
+		out_layers[n++].metal = &s_ff_metal_gold;
+		out_layers[n].sdf = ff_eval_diamond_sdf(ex, ey, -0.125f, 0.068f, 0.0f);
+		out_layers[n++].metal = &s_ff_metal_gold;
+	}
+	else if (r == 24)
+	{
+		out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, 0.12f, 0.17f, 0.11f, 0.042f, TRUE);
+		out_layers[n++].metal = &s_ff_metal_cyan;
+		out_layers[n].sdf = ff_eval_diamond_sdf(ex, ey, -0.03f, 0.195f, 0.058f);
+		out_layers[n++].metal = &s_ff_metal_gold;
+	}
+	else if (r == 25)
+	{
+		out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, -0.06f, 0.20f, 0.14f, 0.044f, TRUE);
+		out_layers[n++].metal = &s_ff_metal_silver;
+		out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, 0.12f, 0.17f, 0.11f, 0.042f, TRUE);
+		out_layers[n++].metal = &s_ff_metal_cyan;
+		out_layers[n].sdf = ff_eval_diamond_sdf(ex, ey, 0.0f, 0.195f, 0.058f);
+		out_layers[n++].metal = &s_ff_metal_gold;
+	}
+	else
+	{
+		real dist = square_root(ex * ex + (ey - 0.01f) * (ey - 0.01f));
+		real ad = (dist - 0.195f >= 0.0f) ? (dist - 0.195f) : -(dist - 0.195f);
+		out_layers[n].sdf = (ey > -0.13f) ? (0.044f - ad) : -1.0f;
+		out_layers[n++].metal = &s_ff_metal_gold;
+		if (r == 26)
+		{
+			out_layers[n].sdf = ff_eval_diamond_sdf(ex, ey, 0.0f, 0.155f, 0.0f);
+			out_layers[n++].metal = &s_ff_metal_cyan;
+		}
+		else if (r == 27)
+		{
+			out_layers[n].sdf = ff_eval_diamond_sdf(ex, ey, 0.03f, 0.135f, 0.0f);
+			out_layers[n++].metal = &s_ff_metal_cyan;
+			out_layers[n].sdf = ff_eval_diamond_sdf(ex, ey, -0.15f, 0.095f, 0.0f);
+			out_layers[n++].metal = &s_ff_metal_cyan;
+		}
+		else if (r == 28)
+		{
+			out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, 0.02f, 0.145f, 0.105f, 0.044f, FALSE);
+			out_layers[n++].metal = &s_ff_metal_cyan;
+			out_layers[n].sdf = ff_eval_diamond_sdf(ex, ey, -0.14f, 0.11f, 0.0f);
+			out_layers[n++].metal = &s_ff_metal_cyan;
+		}
+		else
+		{
+			out_layers[n].sdf = ff_eval_chevron_sdf(ex, ey, 0.04f, 0.155f, 0.12f, 0.046f, FALSE);
+			out_layers[n++].metal = &s_ff_metal_cyan;
+			out_layers[n].sdf = ff_eval_diamond_sdf(ex, ey, -0.04f, 0.12f, 0.0f);
+			out_layers[n++].metal = &s_ff_metal_silver;
+			out_layers[n].sdf = ff_eval_diamond_sdf(ex, ey, -0.16f, 0.11f, 0.0f);
+			out_layers[n++].metal = &s_ff_metal_cyan;
+		}
+	}
+	return n;
+}
+
 static boolean ff_draw_hw_icon_pixels(
 	unsigned long key,
-	pixel32 const *pixels_32x32,
+	pixel32 const *pixels_128x128,
 	short x0,
 	short y0,
 	short size,
@@ -1371,9 +1867,15 @@ static boolean ff_draw_hw_icon_pixels(
 		}
 	}
 
-	if (!entry && pixels_32x32)
+	if (!entry && pixels_128x128)
 	{
-		D3DLOCKED_RECT locked_rect;
+		static pixel32 s_mip64[64 * 64];
+		static pixel32 s_mip32[32 * 32];
+		static pixel32 s_mip16[16 * 16];
+		pixel32 const *mip_ptrs[FF_ICON_HI_MIPS];
+		short mip_dims[FF_ICON_HI_MIPS] = { 128, 64, 32, 16 };
+		short mip;
+
 		entry = &s_hw_icon_cache[s_hw_icon_next];
 		s_hw_icon_next = (s_hw_icon_next + 1) & 63;
 
@@ -1381,22 +1883,22 @@ static boolean ff_draw_hw_icon_pixels(
 		{
 			csmemset(&entry->bitmap, 0, sizeof(entry->bitmap));
 			entry->bitmap.signature = 'bitm';
-			entry->bitmap.width = FF_ICON_TEX_DIM;
-			entry->bitmap.height = FF_ICON_TEX_DIM;
+			entry->bitmap.width = FF_ICON_HI_DIM;
+			entry->bitmap.height = FF_ICON_HI_DIM;
 			entry->bitmap.depth = 1;
 			entry->bitmap.type = 0; /* _bitmap_type_2d */
 			entry->bitmap.format = 11; /* _bitmap_format_a8r8g8b8 */
 			entry->bitmap.flags = 1; /* _bitmap_has_power_of_two_dimensions_bit */
-			entry->bitmap.mipmap_count = 0;
+			entry->bitmap.mipmap_count = FF_ICON_HI_MIPS - 1;
 			entry->bitmap.pixels_offset = 0;
-			entry->bitmap.pixels_size = FF_ICON_TEX_DIM * FF_ICON_TEX_DIM * 4;
+			entry->bitmap.pixels_size = FF_ICON_HI_DIM * FF_ICON_HI_DIM * 4;
 			entry->bitmap.tag_index = NONE;
 			entry->bitmap.cache_block_index = NONE;
 			if (IDirect3DDevice8_CreateTexture(
 					global_d3d_device,
-					FF_ICON_TEX_DIM,
-					FF_ICON_TEX_DIM,
-					1,
+					FF_ICON_HI_DIM,
+					FF_ICON_HI_DIM,
+					FF_ICON_HI_MIPS,
 					0,
 					D3DFMT_A8R8G8B8,
 					D3DPOOL_MANAGED,
@@ -1407,29 +1909,42 @@ static boolean ff_draw_hw_icon_pixels(
 			}
 		}
 
-		csmemset(&locked_rect, 0, sizeof(locked_rect));
-		if (IDirect3DTexture8_LockRect(
-				(IDirect3DTexture8 *)entry->bitmap.hardware_format,
-				0,
-				&locked_rect,
-				NULL,
-				D3DLOCK_NOOVERWRITE) >= 0 && locked_rect.pBits)
+		ff_downsample_2x(pixels_128x128, 128, s_mip64);
+		ff_downsample_2x(s_mip64, 64, s_mip32);
+		ff_downsample_2x(s_mip32, 32, s_mip16);
+		mip_ptrs[0] = pixels_128x128;
+		mip_ptrs[1] = s_mip64;
+		mip_ptrs[2] = s_mip32;
+		mip_ptrs[3] = s_mip16;
+
+		for (mip = 0; mip < FF_ICON_HI_MIPS; mip++)
 		{
-			rasterizer_xbox_bitmap_swizzle2d_long(
-				locked_rect.pBits,
-				pixels_32x32,
-				FF_ICON_TEX_DIM,
-				FF_ICON_TEX_DIM);
-			IDirect3DTexture8_UnlockRect(
-				(IDirect3DTexture8 *)entry->bitmap.hardware_format,
-				0);
-			entry->valid = TRUE;
-			entry->key = key;
+			D3DLOCKED_RECT locked_rect;
+			csmemset(&locked_rect, 0, sizeof(locked_rect));
+			if (IDirect3DTexture8_LockRect(
+					(IDirect3DTexture8 *)entry->bitmap.hardware_format,
+					(UINT)mip,
+					&locked_rect,
+					NULL,
+					D3DLOCK_NOOVERWRITE) >= 0 && locked_rect.pBits)
+			{
+				rasterizer_xbox_bitmap_swizzle2d_long(
+					locked_rect.pBits,
+					mip_ptrs[mip],
+					mip_dims[mip],
+					mip_dims[mip]);
+				IDirect3DTexture8_UnlockRect(
+					(IDirect3DTexture8 *)entry->bitmap.hardware_format,
+					(UINT)mip);
+			}
+			else
+			{
+				return FALSE;
+			}
 		}
-		else
-		{
-			return FALSE;
-		}
+
+		entry->valid = TRUE;
+		entry->key = key;
 	}
 
 	if (entry && entry->bitmap.hardware_format)
@@ -1575,10 +2090,104 @@ void firefight_draw_mcc_rank_icon(
 		if (ff_draw_hw_icon_pixels(key, NULL, x0, y0, size, alpha))
 			return;
 		{
-			pixel32 pixels[FF_ICON_TEX_DIM * FF_ICON_TEX_DIM];
-			for (i = 0; i < FF_ICON_TEX_DIM * FF_ICON_TEX_DIM; i++)
-				pixels[i] = (pixel32)pal[idx_buf[i]];
-			if (ff_draw_hw_icon_pixels(key, pixels, x0, y0, size, alpha))
+			static pixel32 s_shield32[32 * 32];
+			static pixel32 s_buf64[64 * 64];
+			static pixel32 s_raw128[FF_ICON_HI_DIM * FF_ICON_HI_DIM];
+			static pixel32 s_pixels128[FF_ICON_HI_DIM * FF_ICON_HI_DIM];
+			unsigned char const *r0_buf = s_mcc_rank_icon_indices[t_idx][0];
+			pixel32 cav_top = (pixel32)pal[r0_buf[8 * 32 + 12]];
+			pixel32 cav_bot = (pixel32)pal[r0_buf[9 * 32 + 11]];
+			real inv = 2.0f / (real)FF_ICON_HI_DIM;
+			int py, px, li;
+
+			for (py = 0; py < 32; py++)
+			{
+				for (px = 0; px < 32; px++)
+				{
+					int sx = (px < 16) ? px : (31 - px);
+					if (py >= 8 && py <= 20 && sx >= 10 && (py + (15 - sx)) <= 22)
+					{
+						real gt = (real)(py - 8) / 12.0f;
+						s_shield32[py * 32 + px] = ff_lerp_premul_argb(cav_top, cav_bot, gt);
+					}
+					else
+					{
+						s_shield32[py * 32 + px] = (pixel32)pal[r0_buf[py * 32 + sx]];
+					}
+				}
+			}
+
+			ff_xbr_2x(s_shield32, 32, 32, s_buf64);
+			ff_xbr_2x(s_buf64, 64, 64, s_raw128);
+			ff_smooth_icon_128(s_raw128, s_pixels128);
+
+			for (py = 0; py < FF_ICON_HI_DIM; py++)
+			{
+				real ny = ((real)py + 0.5f) * inv - 1.0f;
+				real ey = (ny + 0.125f) / 1.22f;
+
+				for (px = 0; px < FF_ICON_HI_DIM; px++)
+				{
+					pixel32 base = s_pixels128[py * FF_ICON_HI_DIM + px];
+					unsigned long ba = (base >> 24) & 0xFF;
+					real nx, ex;
+					real cr, cg, cb;
+					struct ff_emblem_sdf_layer layers[4];
+					int n_layers;
+
+					if (ba == 0)
+						continue;
+
+					nx = ((real)px + 0.5f) * inv - 1.0f;
+					ex = nx / 1.22f;
+					cr = (real)((base >> 16) & 0xFF);
+					cg = (real)((base >> 8) & 0xFF);
+					cb = (real)(base & 0xFF);
+					n_layers = ff_eval_mcc_rank_emblem(r_idx, ex, ey, layers);
+
+					for (li = 0; li < n_layers; li++)
+					{
+						real esd = layers[li].sdf;
+						if (esd > -0.028f)
+						{
+							if (esd < 0.0f)
+							{
+								real t_sh = (esd + 0.028f) / 0.028f;
+								real mul = 1.0f - 0.72f * t_sh;
+								cr *= mul;
+								cg *= mul;
+								cb *= mul;
+							}
+							else
+							{
+								real t_cov = MIN(1.0f, esd / 0.018f);
+								struct ff_metal_palette const *mp = layers[li].metal;
+								unsigned char const *ecol;
+								real elight = -0.6f * ex - 0.8f * ey;
+
+								if (esd < 0.032f && elight > 0.02f)
+									ecol = mp->light;
+								else if (esd < 0.032f && elight < -0.02f)
+									ecol = mp->dark;
+								else
+									ecol = (elight < 0.12f) ? mp->mid : mp->light;
+
+								cr = cr * (1.0f - t_cov) + (real)ecol[0] * t_cov;
+								cg = cg * (1.0f - t_cov) + (real)ecol[1] * t_cov;
+								cb = cb * (1.0f - t_cov) + (real)ecol[2] * t_cov;
+							}
+						}
+					}
+
+					s_pixels128[py * FF_ICON_HI_DIM + px] = (pixel32)(
+						(ba << 24) |
+						((unsigned long)PIN((long)(cr + 0.5f), 0L, 255L) << 16) |
+						((unsigned long)PIN((long)(cg + 0.5f), 0L, 255L) << 8) |
+						(unsigned long)PIN((long)(cb + 0.5f), 0L, 255L));
+				}
+			}
+
+			if (ff_draw_hw_icon_pixels(key, s_pixels128, x0, y0, size, alpha))
 				return;
 		}
 	}
@@ -1601,8 +2210,8 @@ void firefight_draw_mcc_rank_icon(
 		{
 			for (px = 0; px < FF_ICON_GRID_DIM; px++)
 			{
-				int sy = py * 2 + 1;
-				int sx = px * 2 + 1;
+				int sy = py * 2 + (py >= (FF_ICON_GRID_DIM / 2) ? 1 : 0);
+				int sx = px * 2 + (px >= (FF_ICON_GRID_DIM / 2) ? 1 : 0);
 				grid[py][px] = (pixel32)pal[idx_buf[sy * FF_ICON_TEX_DIM + sx]];
 			}
 		}
@@ -1634,10 +2243,17 @@ void firefight_draw_h3_ranked_icon(
 		if (ff_draw_hw_icon_pixels(key, NULL, x0, y0, size, alpha))
 			return;
 		{
-			pixel32 pixels[FF_ICON_TEX_DIM * FF_ICON_TEX_DIM];
-			for (i = 0; i < FF_ICON_TEX_DIM * FF_ICON_TEX_DIM; i++)
-				pixels[i] = (pixel32)pal[idx_buf[i]];
-			if (ff_draw_hw_icon_pixels(key, pixels, x0, y0, size, alpha))
+			static pixel32 s_src32[32 * 32];
+			static pixel32 s_buf64[64 * 64];
+			static pixel32 s_raw128[FF_ICON_HI_DIM * FF_ICON_HI_DIM];
+			static pixel32 s_pixels128[FF_ICON_HI_DIM * FF_ICON_HI_DIM];
+
+			for (i = 0; i < 32 * 32; i++)
+				s_src32[i] = (pixel32)pal[idx_buf[i]];
+			ff_xbr_2x(s_src32, 32, 32, s_buf64);
+			ff_xbr_2x(s_buf64, 64, 64, s_raw128);
+			ff_smooth_icon_128(s_raw128, s_pixels128);
+			if (ff_draw_hw_icon_pixels(key, s_pixels128, x0, y0, size, alpha))
 				return;
 		}
 	}
@@ -1660,8 +2276,8 @@ void firefight_draw_h3_ranked_icon(
 		{
 			for (px = 0; px < FF_ICON_GRID_DIM; px++)
 			{
-				int sy = py * 2 + 1;
-				int sx = px * 2 + 1;
+				int sy = py * 2 + (py >= (FF_ICON_GRID_DIM / 2) ? 1 : 0);
+				int sx = px * 2 + (px >= (FF_ICON_GRID_DIM / 2) ? 1 : 0);
 				grid[py][px] = (pixel32)pal[idx_buf[sy * FF_ICON_TEX_DIM + sx]];
 			}
 		}
@@ -1962,38 +2578,71 @@ void firefight_draw_player_emblem(
 		if (ff_draw_hw_icon_pixels(key, NULL, x0, y0, size, alpha))
 			return;
 		{
+			static pixel32 s_pixels128[FF_ICON_HI_DIM * FF_ICON_HI_DIM];
 			pixel32 col_pri = s_halo_emblem_colors[c_pri];
 			pixel32 col_sec = s_halo_emblem_colors[c_sec];
 			pixel32 col_bg = s_halo_emblem_colors[c_bg];
 			pixel32 col_bg_dark = ff_lerp_argb(col_bg, 0xFF080C14, 0.45f);
 			pixel32 col_bg_border = ff_lerp_argb(col_bg, 0xFFFFFFFF, 0.35f);
-			pixel32 pixels[FF_ICON_TEX_DIM * FF_ICON_TEX_DIM];
-			real inv_half = 2.0f / (real)FF_ICON_TEX_DIM;
-			short py, px;
+			real inv_half = 2.0f / (real)FF_ICON_HI_DIM;
+			short py, px, sy, sx;
 
-			for (py = 0; py < FF_ICON_TEX_DIM; py++)
+			for (py = 0; py < FF_ICON_HI_DIM; py++)
 			{
-				real ny = ((real)py + 0.5f) * inv_half - 1.0f;
-				real grad_t = (real)py / (real)(FF_ICON_TEX_DIM - 1);
+				real grad_t = (real)py / (real)(FF_ICON_HI_DIM - 1);
 				pixel32 bg_fill = ff_lerp_argb(col_bg, col_bg_dark, grad_t);
 
-				for (px = 0; px < FF_ICON_TEX_DIM; px++)
+				for (px = 0; px < FF_ICON_HI_DIM; px++)
 				{
-					pixel32 pcol = 0;
-					real nx = ((real)px + 0.5f) * inv_half - 1.0f;
-					boolean is_bg_border = FALSE;
-					int fg_layer = mcc_eval_emblem_fg(e->foreground, e->secondary_layer, nx, ny);
+					unsigned long r_sum = 0, g_sum = 0, b_sum = 0, a_sum = 0;
 
-					if (fg_layer == 1)
-						pcol = col_pri;
-					else if (fg_layer == 2)
-						pcol = col_sec;
-					else if (mcc_eval_emblem_bg(e->background, nx, ny, &is_bg_border))
-						pcol = is_bg_border ? col_bg_border : bg_fill;
-					pixels[py * FF_ICON_TEX_DIM + px] = pcol;
+					for (sy = 0; sy < 2; sy++)
+					{
+						real ny = ((real)py + 0.25f + 0.5f * (real)sy) * inv_half - 1.0f;
+						for (sx = 0; sx < 2; sx++)
+						{
+							real nx = ((real)px + 0.25f + 0.5f * (real)sx) * inv_half - 1.0f;
+							pixel32 pcol = 0;
+							boolean is_bg_border = FALSE;
+							int fg_layer = mcc_eval_emblem_fg(e->foreground, e->secondary_layer, nx, ny);
+
+							if (fg_layer == 1)
+								pcol = col_pri;
+							else if (fg_layer == 2)
+								pcol = col_sec;
+							else if (mcc_eval_emblem_bg(e->background, nx, ny, &is_bg_border))
+								pcol = is_bg_border ? col_bg_border : bg_fill;
+
+							if (pcol != 0)
+							{
+								unsigned long sa = (pcol >> 24) & 0xFF;
+								r_sum += ((pcol >> 16) & 0xFF) * sa;
+								g_sum += ((pcol >> 8) & 0xFF) * sa;
+								b_sum += (pcol & 0xFF) * sa;
+								a_sum += sa;
+							}
+						}
+					}
+
+					if (a_sum == 0)
+					{
+						s_pixels128[py * FF_ICON_HI_DIM + px] = 0;
+					}
+					else
+					{
+						unsigned long r = (r_sum + (a_sum >> 1)) / a_sum;
+						unsigned long g = (g_sum + (a_sum >> 1)) / a_sum;
+						unsigned long b = (b_sum + (a_sum >> 1)) / a_sum;
+						unsigned long a = (a_sum + 2) >> 2;
+						if (r > 255) r = 255;
+						if (g > 255) g = 255;
+						if (b > 255) b = 255;
+						if (a > 255) a = 255;
+						s_pixels128[py * FF_ICON_HI_DIM + px] = (pixel32)((a << 24) | (r << 16) | (g << 8) | b);
+					}
 				}
 			}
-			if (ff_draw_hw_icon_pixels(key, pixels, x0, y0, size, alpha))
+			if (ff_draw_hw_icon_pixels(key, s_pixels128, x0, y0, size, alpha))
 				return;
 		}
 	}

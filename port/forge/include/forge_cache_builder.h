@@ -173,56 +173,13 @@ struct forge_map_blueprint_data
 	struct forge_scenario_edit_state initial_state;
 };
 
-/* Catalog entry for the in-game & 2D Forge spawn palette */
-struct forge_catalog_item
-{
-	uint32_t group_tag; /* 'weap', 'vehi', 'eqip', 'itmc', 'scen', 'mach', 'ctrl', 'lifi', 'bipd', 'actv' */
-	char tag_path[FORGE_TAG_PATH_MAX];
-	char display_name[64];
-	int32_t source_cache; /* 0 = current map, 1 = forgeasset.map, 2 = customforgeasset.map */
-};
-
 /* ---------- prototypes */
-
-/* Builds Faber_data/forge_maps/forgeasset.map from CUSTOM EDITION DEFAULT MAPS + PC MAPS
-   and records all harvested tag attributions into credits_md_path ("Faber_data/credits.md") */
-int forge_build_master_asset_cache(
-	char const *ce_maps_dir,
-	char const *pc_maps_dir,
-	char const *output_map_path,
-	char const *credits_md_path);
-
-/* Builds Faber_data/forge_maps/customforgeasset.map from user/community CE custom maps
-   and appends custom tag attributions to credits_md_path ("Faber_data/credits.md") */
-int forge_build_custom_asset_cache(
-	char const *base_ce_map_path,
-	char const *ce_res_dir,
-	char const *forgeasset_path,
-	char const *const *custom_map_paths,
-	int custom_map_count,
-	char const *output_map_path,
-	char const *credits_md_path);
-
-/* Injects unique tags from a single custom map into customforgeasset.map ("Inject Custom Tags" UI action)
-   and automatically appends the new tag attributions to credits_md_path ("Faber_data/credits.md") */
-int forge_inject_custom_map_into_cache(
-	char const *source_custom_map_path,
-	char const *ce_res_dir,
-	char const *forgeasset_path,
-	char const *customforgeasset_path,
-	char const *credits_md_path,
-	int *out_injected_root_count);
 
 /* Exports a modified scenario map to custom_maps/<output_map_name>.map (.bmp, .txt) ("Save Copy As..." UI action) */
 int forge_export_scenario_map(
 	char const *base_map_path,
-	char const *ce_res_dir,
-	char const *pc_res_dir,
-	char const *const *donor_map_paths,
-	int donor_map_count,
 	struct forge_scenario_edit_state const *edits,
-	char const *output_map_name,
-	char const *output_dir);
+	char const *output_map_name);
 
 /* Loads 2D floorplan collision edges and initial scenario placements from any CE (v609) or PC (v7) .map file */
 int forge_load_map_blueprint(
@@ -231,20 +188,6 @@ int forge_load_map_blueprint(
 
 void forge_free_map_blueprint(
 	struct forge_map_blueprint_data *blueprint);
-
-/* Enumerates spawnable tags from a .map file (such as forgeasset.map or customforgeasset.map) */
-int forge_enumerate_map_catalog(
-	char const *map_path,
-	int32_t source_cache_id,
-	struct forge_catalog_item *out_items,
-	int max_items);
-
-/* Validates a Custom Edition v609 .map file using OpenCE's custom_edition_cache_load + tag_validate_custom_edition_tags */
-int forge_validate_custom_edition_map_file(
-	char const *map_path,
-	char const *ce_res_dir,
-	int32_t *out_tag_count,
-	int32_t *out_corrections);
 
 #ifdef __cplusplus
 }

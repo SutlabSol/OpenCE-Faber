@@ -445,19 +445,30 @@ void firefight_setup_faction_allegiances(
 	/* Playable Elite mode is disabled (no first-person Elite arms / lifepod exit bugs) */
 	ff_state.elite_player_mode = FALSE;
 
+	/* Players have player->team_index == 0 (_game_team_default) while player/bot bipeds have
+	 * unit->object.owner_team_index == 1 (_game_team_player). Ally _game_team_default with
+	 * _game_team_player so aim_assist and motion_sensor treat bots and co-op players as friendlies. */
+	game_allegiance_create(_game_team_default, FALSE, _game_team_player, FALSE, 0, 0, FALSE);
+
 	if (ff->wave_faction == _firefight_faction_unsc_humans)
 	{
 		game_allegiance_remove(_game_team_player, _game_team_human);
 		game_allegiance_remove(_game_team_player, _game_team_covenant);
+		game_allegiance_remove(_game_team_default, _game_team_human);
+		game_allegiance_remove(_game_team_default, _game_team_covenant);
 	}
 	else
 	{
 		/* Players are UNSC Spartans allied with UNSC Marines */
 		game_allegiance_create(_game_team_player, FALSE, _game_team_human, FALSE, 0, 0, FALSE);
 		game_allegiance_remove(_game_team_player, _game_team_covenant);
+		game_allegiance_create(_game_team_default, FALSE, _game_team_human, FALSE, 0, 0, FALSE);
+		game_allegiance_remove(_game_team_default, _game_team_covenant);
 	}
 	game_allegiance_remove(_game_team_player, _game_team_flood);
 	game_allegiance_remove(_game_team_player, _game_team_sentinel);
+	game_allegiance_remove(_game_team_default, _game_team_flood);
+	game_allegiance_remove(_game_team_default, _game_team_sentinel);
 
 	if (allied_enemies)
 	{
@@ -1235,6 +1246,7 @@ void firefight_variant_cleanup(
 		return;
 	ff = &variant->game_engine_variant.firefight;
 	variant->universal_variant.teams = TRUE;
+	SET_FLAG(variant->universal_variant.flags, _game_variant_allow_friendly_navpoints_bit, TRUE);
 	if (ff->starting_lives == 0)
 		ff->starting_lives = 7;
 	if (ff->max_lives_cap < 0)
@@ -1252,7 +1264,7 @@ void firefight_variant_options_default(
 {
 	if (!options)
 		return;
-	options->friendly_fire = _friendly_fire_off;
+	options->friendly_fire = _friendly_fire_on;
 	options->firefight_custom_skulls = 0UL;
 	options->firefight_generator_health = 2000;
 	options->firefight_score_life_threshold = FIREFIGHT_DEFAULT_SCORE_LIFE_BONUS;
@@ -1464,6 +1476,8 @@ static void firefight_apply_tick_player_traits(
 	{
 		struct unit_datum *unit;
 
+		if (player->team_index != 0)
+			player->team_index = 0;
 		if (player->unit_index == NONE)
 			continue;
 		unit = (struct unit_datum *)object_try_and_get_and_verify_type(player->unit_index, _object_mask_unit);
@@ -1544,6 +1558,13 @@ static void firefight_update(
 	if (ff_state.session_elapsed_ticks <= 2)
 	{
 		firefight_cleanup_natural_multiplayer_sandbox(ff_state.session_elapsed_ticks == 1);
+		if (ff_state.session_elapsed_ticks == 2 &&
+			ff_state.current_set == 1 &&
+			ff_state.current_round == 1 &&
+			ff_state.deployed_set_vehicle_count == 0)
+		{
+			firefight_spawn_scheduled_round_vehicles(1, FALSE);
+		}
 	}
 	if (ff_state.session_elapsed_ticks == 5 &&
 		(ff->ordnance_drops == _firefight_ordnance_per_round ||

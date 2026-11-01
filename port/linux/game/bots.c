@@ -200,8 +200,10 @@ debug.bot_trace logs each bot's state.
 
 #include "cseries.h"
 #include "game/game.h"
+#include "game/game_allegiance.h"
 #include "game/game_engine.h"
 #include "game/players.h"
+#include "main/main.h"
 #include "objects/objects.h"
 #include "units/units.h"
 #include "units/bipeds.h"
@@ -218,6 +220,7 @@ debug.bot_trace logs each bot's state.
 #include "physics/breakable_surfaces.h"
 #include "scenario/scenario.h"
 #include "scenario/scenario_definitions.h"
+#include "ai/ai_scenario_definitions.h"
 #include "structures/structure_bsp_definitions.h"
 #include "physics/collision_bsp_definitions.h"
 #include "networking/network_game_globals.h"
@@ -631,6 +634,7 @@ struct bots_bot
 
 	/* its target */
 	long target_player_index;
+	long target_unit_index;
 	long target_seen_tick;
 	long target_first_seen_tick;
 	real_point3d target_last_position;
@@ -839,6 +843,7 @@ struct bots_bot
 static struct
 {
 	boolean map_ready;
+	short prepared_bsp_index;
 	long roam_point_count;
 	real_point3d roam_points[BOTS_MAXIMUM_ROAM_POINTS];
 	long roam_surfaces[BOTS_MAXIMUM_ROAM_POINTS];
@@ -1123,6 +1128,8 @@ static char const *bots_setting_string(char const *variable, char const *name)
 
 static long bots_count_override = -1;
 
+extern int g_forge_session_enabled;
+
 void bots_set_count_override(long count)
 {
 	bots_count_override = count;
@@ -1130,7 +1137,11 @@ void bots_set_count_override(long count)
 
 long bots_wanted_count(void)
 {
-	long count = bots_count_override >= 0 ? bots_count_override : bots_setting_integer("HALO_BOTS", "bots.count");
+	long count;
+
+	if (g_forge_session_enabled)
+		return 0;
+	count = bots_count_override >= 0 ? bots_count_override : bots_setting_integer("HALO_BOTS", "bots.count");
 
 	return count < 0 ? 0 : count > BOTS_MAXIMUM ? BOTS_MAXIMUM : count;
 }
@@ -1210,8 +1221,10 @@ clients drive the bots with the input the host relays (network_distributed.c);
 not a public one */
 int bots_game_allowed(void)
 {
+	if (g_forge_session_enabled)
+		return 0;
 	if (!global_network_game_server_get())
-		return FALSE;
+		return !game_engine_running() && !main_menu_is_active() && game_connection() == _game_connection_local;
 	return network_game_is_splitscreen_local() || !p2p_hosting_internet() || !p2p_hosting_listed();
 }
 
@@ -2744,6 +2757,7 @@ static void bots_prepare_map(void)
 	long index;
 
 	bots_globals.map_ready = TRUE;
+	bots_globals.prepared_bsp_index = global_structure_bsp_index_get();
 	bots_globals.roam_point_count = 0;
 	bots_prepare_paths();
 	/* port: the map's weapons known at once (halo.log names its precision
@@ -2830,6 +2844,66 @@ static void bots_prepare_map(void)
 			TAG_BLOCK_GET_ELEMENT(&scenario->players, index, struct player_starting_location);
 
 		bots_add_roam_point(&location->position);
+	}
+	if (bots_globals.roam_point_count < BOTS_MAXIMUM_ROAM_POINTS)
+	{
+		short bsp_index = global_structure_bsp_index_get();
+		long enc_index;
+
+		for (enc_index = 0;
+			enc_index < scenario->ai_encounters.count && bots_globals.roam_point_count < BOTS_MAXIMUM_ROAM_POINTS;
+			enc_index++)
+		{
+			struct encounter_definition *encounter =
+				TAG_BLOCK_GET_ELEMENT(&scenario->ai_encounters, enc_index, struct encounter_definition);
+			long pos_index, squad_index;
+
+			if (encounter->runtime_structure_bsp_reference_index != NONE &&
+				encounter->runtime_structure_bsp_reference_index != bsp_index)
+			{
+				continue;
+			}
+			for (pos_index = 0;
+				pos_index < encounter->firing_positions.count && bots_globals.roam_point_count < BOTS_MAXIMUM_ROAM_POINTS;
+				pos_index += 2)
+			{
+				struct firing_position_definition *fp =
+					TAG_BLOCK_GET_ELEMENT(&encounter->firing_positions, pos_index, struct firing_position_definition);
+				long existing;
+
+				for (existing = 0; existing < bots_globals.roam_point_count; existing++)
+				{
+					if (bots_distance2d(&bots_globals.roam_points[existing], &fp->position) < 6.0f)
+						break;
+				}
+				if (existing == bots_globals.roam_point_count)
+					bots_add_roam_point(&fp->position);
+			}
+			for (squad_index = 0;
+				squad_index < encounter->squads.count && bots_globals.roam_point_count < BOTS_MAXIMUM_ROAM_POINTS;
+				squad_index++)
+			{
+				struct squad_definition *squad =
+					TAG_BLOCK_GET_ELEMENT(&encounter->squads, squad_index, struct squad_definition);
+
+				for (pos_index = 0;
+					pos_index < squad->starting_locations.count && bots_globals.roam_point_count < BOTS_MAXIMUM_ROAM_POINTS;
+					pos_index += 2)
+				{
+					struct actor_starting_location *loc =
+						TAG_BLOCK_GET_ELEMENT(&squad->starting_locations, pos_index, struct actor_starting_location);
+					long existing;
+
+					for (existing = 0; existing < bots_globals.roam_point_count; existing++)
+					{
+						if (bots_distance2d(&bots_globals.roam_points[existing], &loc->position) < 6.0f)
+							break;
+					}
+					if (existing == bots_globals.roam_point_count)
+						bots_add_roam_point(&loc->position);
+				}
+			}
+		}
 	}
 	/* (debug: HALO_BOT_TRACE, the map's starting locations and netgame
 	flags) */
@@ -2920,7 +2994,8 @@ static void bots_prepare_map(void)
 	}
 	/* (CTF: the teams' stands, the scenario's netgame flags, for the tests:
 	run_bots_test.sh checks that each team spawns at its own) */
-	if (game_engine_get_variant()->game_engine_index == game_engine_ctf)
+	if (game_engine_running() && game_engine_get_variant() &&
+		game_engine_get_variant()->game_engine_index == game_engine_ctf)
 	{
 		real_point3d stands[2] = { { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } };
 
@@ -2948,9 +3023,12 @@ void bots_initialize_for_new_map(void)
 	for (index = 0; index < BOTS_MAXIMUM; index++)
 	{
 		bots_globals.bots[index].player_index = NONE;
+		bots_globals.bots[index].target_player_index = NONE;
+		bots_globals.bots[index].target_unit_index = NONE;
 		bots_globals.bots[index].search_slot = NONE;
 	}
 	bots_globals.map_ready = FALSE;
+	bots_globals.prepared_bsp_index = NONE;
 	bots_globals.roam_point_count = 0;
 	bots_globals.tick_us = 0;
 	bots_globals.search_us = 0;
@@ -4140,13 +4218,86 @@ static boolean bots_line_of_sight(long unit_index, real_point3d const *eye, real
 	return FALSE;
 }
 
+static boolean bots_is_pve(void)
+{
+	return !game_engine_running() || firefight_active();
+}
+
 static boolean bots_is_enemy(struct player_datum *player, struct player_datum *other)
 {
 	if (player == other || other->unit_index == NONE)
 		return FALSE;
+	if (bots_is_pve())
+		return FALSE;
 	if (game_engine_has_teams() && player->team_index == other->team_index)
 		return FALSE;
 	return TRUE;
+}
+
+static boolean bots_ai_unit_is_enemy(struct player_datum const *player, long bot_unit_index, long candidate_unit_index)
+{
+	struct unit_datum *other_unit;
+
+	(void)player;
+	if (candidate_unit_index == NONE || candidate_unit_index == bot_unit_index)
+		return FALSE;
+	other_unit = (struct unit_datum *)object_try_and_get_and_verify_type(candidate_unit_index, _object_mask_unit);
+	if (!other_unit || other_unit->object.type != _object_type_biped)
+		return FALSE;
+	if (other_unit->unit.player_index != NONE)
+		return FALSE;
+	if (TEST_FLAG(other_unit->object.flags, _object_outside_of_map_bit) ||
+		!TEST_FLAG(other_unit->object.flags, _object_connected_to_map_bit) ||
+		TEST_FLAG(other_unit->object.damage_flags, _object_dead_bit) ||
+		TEST_FLAG(other_unit->object.damage_flags, _object_cannot_take_damage_bit))
+	{
+		return FALSE;
+	}
+	if (other_unit->object.parent_object_index != NONE)
+	{
+		struct object_datum *parent = object_try_and_get(other_unit->object.parent_object_index);
+
+		if (parent && TEST_FLAG(parent->object.damage_flags, _object_cannot_take_damage_bit))
+			return FALSE;
+	}
+	if (other_unit->unit.actor_index == NONE &&
+		other_unit->unit.swarm_actor_index == NONE &&
+		other_unit->object.owner_team_index <= _game_team_human)
+	{
+		return FALSE;
+	}
+	if (firefight_active() && other_unit->object.owner_team_index >= _game_team_covenant)
+		return TRUE;
+	return game_team_is_enemy(_game_team_player, other_unit->object.owner_team_index);
+}
+
+static long bots_target_unit(struct bots_bot *bot)
+{
+	struct unit_datum *target_unit;
+
+	if (bot->target_unit_index == NONE)
+		return NONE;
+	target_unit = (struct unit_datum *)object_try_and_get_and_verify_type(bot->target_unit_index, _object_mask_unit);
+	if (!target_unit ||
+		TEST_FLAG(target_unit->object.flags, _object_outside_of_map_bit) ||
+		TEST_FLAG(target_unit->object.damage_flags, _object_dead_bit))
+	{
+		bot->target_unit_index = NONE;
+		bot->target_player_index = NONE;
+		return NONE;
+	}
+	if (bot->target_player_index != NONE)
+	{
+		struct player_datum *target_player = player_try_and_get(bot->target_player_index);
+
+		if (!target_player || target_player->unit_index != bot->target_unit_index)
+		{
+			bot->target_unit_index = NONE;
+			bot->target_player_index = NONE;
+			return NONE;
+		}
+	}
+	return bot->target_unit_index;
 }
 
 /* the enemy the bot sees best now, NONE for none: of the enemies in its
@@ -4167,44 +4318,48 @@ struct bots_target_candidate
 	real_point3d point;
 };
 
-/* an enemy's score as a target (its point the bounding sphere's centre);
+/* an enemy unit's score as a target (its point the bounding sphere's centre);
 FALSE for one out of reach or view, or not an enemy */
-static boolean bots_target_score(struct bots_bot *bot, struct player_datum *player, struct player_datum *other,
-	long player_index, real_point3d const *eye, struct bots_skill_definition const *skill, boolean hurt,
+static boolean bots_target_unit_score(struct bots_bot *bot, struct player_datum *player,
+	long target_player_index, long target_unit_index, real_point3d const *eye,
+	struct bots_skill_definition const *skill, boolean hurt,
 	real sight_scale, struct bots_target_candidate *candidate)
 {
 	struct object_datum *object;
 	struct unit_datum *other_unit;
 	real distance, reach, bearing;
 	real half_view = 0.5f * skill->field_of_view_degrees * BOTS_DEGREES;
+	boolean is_current_target = target_unit_index == bot->target_unit_index;
+	boolean close_awareness;
 
-	if (!bots_is_enemy(player, other))
-		return FALSE;
-	object = object_get(other->unit_index);
-	other_unit = unit_get(other->unit_index);
+	object = object_get(target_unit_index);
+	other_unit = unit_get(target_unit_index);
 	if (TEST_FLAG(object->object.damage_flags, _object_dead_bit))
 		return FALSE;
 	candidate->point = object->object.bounding_sphere_center;
 	distance = bots_distance3d(eye, &candidate->point);
 	/* (port: further through a scope at a vantage point: bots_tactics.h) */
 	reach = skill->sight_distance * sight_scale;
+	if (bots_is_pve())
+		reach = MAX(reach, 45.0f);
 	/* (active camouflage: seen only close) */
 	if (TEST_FLAG(other_unit->unit.flags, _unit_active_camouflaged_bit))
 		reach *= 0.3f;
 	/* (the one it fights: a little further) */
-	if (player_index == bot->target_player_index)
+	if (is_current_target)
 		reach *= 1.25f;
 	if (distance > reach)
 		return FALSE;
 	bearing = (real)fabs(bots_angle_difference((real)atan2(candidate->point.y - eye->y, candidate->point.x - eye->x),
 		bot->yaw));
+	close_awareness = distance <= (bots_is_pve() ? 12.0f : 3.0f);
 	/* (out of view: unless close by, it shot the bot, or it is the one
 	the bot fights) */
-	if (bearing > half_view && distance > 3.0f && !hurt && player_index != bot->target_player_index)
+	if (bearing > half_view && !close_awareness && !hurt && !is_current_target)
 		return FALSE;
 	/* (nor far above or below where it looks, on the same terms: a player
 	running by looks ahead, not up) */
-	if (distance > 3.0f && !hurt && player_index != bot->target_player_index)
+	if (!close_awareness && !hurt && !is_current_target)
 	{
 		real dx = candidate->point.x - eye->x, dy = candidate->point.y - eye->y;
 		real elevation = (real)atan2(candidate->point.z - eye->z, (real)sqrt(dx * dx + dy * dy));
@@ -4215,23 +4370,35 @@ static boolean bots_target_score(struct bots_bot *bot, struct player_datum *play
 			return FALSE;
 		}
 	}
-	candidate->player_index = player_index;
-	candidate->unit_index = other->unit_index;
-	candidate->score = distance + bearing * 4.0f - (player_index == bot->target_player_index ? 6.0f : 0.0f);
+	candidate->player_index = target_player_index;
+	candidate->unit_index = target_unit_index;
+	candidate->score = distance + bearing * 4.0f - (is_current_target ? 6.0f : 0.0f);
 	/* (capture the flag: who carries its team's flag, before anyone) */
-	if (bots_ctf_active() && (player->team_index == 0 || player->team_index == 1))
+	if (target_player_index != NONE && bots_ctf_active() && (player->team_index == 0 || player->team_index == 1))
 	{
 		bots_ctf_update();
 		if (bots_globals.ctf.present[player->team_index] &&
-			bots_globals.ctf.carrier_player_index[player->team_index] == player_index)
+			bots_globals.ctf.carrier_player_index[player->team_index] == target_player_index)
 		{
 			candidate->score -= 30.0f;
 		}
 	}
 	/* (king of the hill: who stands on the hill, before anyone) */
-	if (bots_king_active() && game_engine_king_point_on_hill(&object->object.bounding_sphere_center))
+	if (target_player_index != NONE && bots_king_active() &&
+		game_engine_king_point_on_hill(&object->object.bounding_sphere_center))
+	{
 		candidate->score -= 20.0f;
+	}
 	return TRUE;
+}
+
+static boolean bots_target_score(struct bots_bot *bot, struct player_datum *player, struct player_datum *other,
+	long player_index, real_point3d const *eye, struct bots_skill_definition const *skill, boolean hurt,
+	real sight_scale, struct bots_target_candidate *candidate)
+{
+	if (!bots_is_enemy(player, other))
+		return FALSE;
+	return bots_target_unit_score(bot, player, player_index, other->unit_index, eye, skill, hurt, sight_scale, candidate);
 }
 
 static long bots_find_target(struct bots_bot *bot, struct player_datum *player, struct unit_datum *unit,
@@ -4242,7 +4409,7 @@ static long bots_find_target(struct bots_bot *bot, struct player_datum *player, 
 	struct player_datum *other;
 	boolean hurt = game_time_get() - bot->hurt_tick < TICKS_PER_SECOND * 2;
 	real sight_scale = bots_tactics_sight_scale((long)(bot - bots_globals.bots));
-	struct bots_target_candidate candidates[BOTS_MAXIMUM + MAXIMUM_LOCAL_PLAYERS];
+	struct bots_target_candidate candidates[64];
 	long candidate_count = 0, index;
 	boolean ordered = TRUE;
 
@@ -4260,6 +4427,29 @@ static long bots_find_target(struct bots_bot *bot, struct player_datum *player, 
 				ordered = FALSE;
 			else if (score < REAL_MAX)
 				candidate_count++;
+		}
+	}
+	if (bots_is_pve() && ordered)
+	{
+		struct object_iterator unit_iterator;
+
+		object_iterator_new(&unit_iterator, _object_mask_unit, 0);
+		while (object_iterator_next(&unit_iterator) != NULL && ordered)
+		{
+			if (!bots_ai_unit_is_enemy(player, player->unit_index, unit_iterator.index))
+				continue;
+			if (candidate_count >= (long)NUMBEROF(candidates))
+				ordered = FALSE;
+			else if (bots_target_unit_score(bot, player, NONE, unit_iterator.index, eye, skill, hurt, sight_scale,
+				&candidates[candidate_count]))
+			{
+				real score = candidates[candidate_count].score;
+
+				if (score != score)
+					ordered = FALSE;
+				else if (score < REAL_MAX)
+					candidate_count++;
+			}
 		}
 	}
 	if (!ordered)
@@ -4280,7 +4470,25 @@ static long bots_find_target(struct bots_bot *bot, struct player_datum *player, 
 				continue;
 			}
 			best_score = candidate.score;
-			best_index = candidate.player_index;
+			best_index = candidate.unit_index;
+		}
+		if (bots_is_pve())
+		{
+			struct object_iterator unit_iterator;
+
+			object_iterator_new(&unit_iterator, _object_mask_unit, 0);
+			while (object_iterator_next(&unit_iterator) != NULL)
+			{
+				if (!bots_ai_unit_is_enemy(player, player->unit_index, unit_iterator.index) ||
+					!bots_target_unit_score(bot, player, NONE, unit_iterator.index, eye, skill, hurt, sight_scale, &candidate) ||
+					candidate.score >= best_score ||
+					!bots_line_of_sight(player->unit_index, eye, &candidate.point, candidate.unit_index))
+				{
+					continue;
+				}
+				best_score = candidate.score;
+				best_index = candidate.unit_index;
+			}
 		}
 		return best_index;
 	}
@@ -4295,7 +4503,7 @@ static long bots_find_target(struct bots_bot *bot, struct player_datum *player, 
 				least = index;
 		}
 		if (bots_line_of_sight(player->unit_index, eye, &candidates[least].point, candidates[least].unit_index))
-			return candidates[least].player_index;
+			return candidates[least].unit_index;
 		/* (out, the others kept in their order) */
 		candidate_count--;
 		for (index = least; index < candidate_count; index++)
@@ -4361,9 +4569,144 @@ static void bots_pick_roam_goal(struct bots_bot *bot, real_point3d const *positi
 {
 	long tries;
 
+	bot->hunting = FALSE;
+	if (bots_is_pve())
+	{
+		struct player_datum *player = player_get(bot->player_index);
+		struct data_iterator player_iterator;
+		struct player_datum *other;
+		long human_unit_index = NONE;
+		real human_distance = REAL_MAX;
+		long best_enemy_unit = NONE;
+		real best_enemy_score = REAL_MAX;
+		struct object_iterator unit_iterator;
+
+		data_iterator_new(&player_iterator, player_data);
+		while ((other = (struct player_datum *)data_iterator_next(&player_iterator)) != NULL)
+		{
+			real dist;
+
+			if (other == player || other->unit_index == NONE ||
+				bots_machine_is_bot(other->network_player_data.machine_index) ||
+				TEST_FLAG(object_get(other->unit_index)->object.damage_flags, _object_dead_bit))
+			{
+				continue;
+			}
+			dist = bots_distance3d(position, &object_get(other->unit_index)->object.position);
+			if (dist < human_distance)
+			{
+				human_distance = dist;
+				human_unit_index = other->unit_index;
+			}
+		}
+		if (!game_engine_running() && human_unit_index != NONE &&
+			bots_unit_vehicle(player->unit_index) == NONE &&
+			game_time_get() - bot->target_seen_tick > TICKS_PER_SECOND * 2 &&
+			(human_distance > 65.0f || (human_distance > 25.0f && bot->path_failures >= 3)) &&
+			game_time_get() - bot->via_tick > TICKS_PER_SECOND * 5)
+		{
+			real_point3d human_ground;
+			long human_surface = bots_unit_surface(human_unit_index, &human_ground);
+
+			if (human_surface != NONE &&
+				object_get(human_unit_index)->object.location.cluster_index != NONE &&
+				player_teleport(bot->player_index, human_unit_index, &human_ground))
+			{
+				bot->via_tick = game_time_get();
+				bot->path_failures = 0;
+				bot->goal_kind = _bots_goal_none;
+				return;
+			}
+		}
+		if (firefight_active() || human_unit_index == NONE || human_distance < 32.0f)
+		{
+			object_iterator_new(&unit_iterator, _object_mask_unit, 0);
+			while (object_iterator_next(&unit_iterator) != NULL)
+			{
+				struct object_datum *enemy_obj;
+				real dist_bot, dist_human, score;
+
+				if (!bots_ai_unit_is_enemy(player, player->unit_index, unit_iterator.index))
+					continue;
+				enemy_obj = object_get(unit_iterator.index);
+				dist_bot = bots_distance3d(position, &enemy_obj->object.position);
+				dist_human = human_unit_index != NONE ?
+					bots_distance3d(&object_get(human_unit_index)->object.position, &enemy_obj->object.position) :
+					dist_bot;
+				if (!firefight_active() && dist_bot > 42.0f && dist_human > 42.0f)
+					continue;
+				score = dist_bot + bots_random_real(bot) * 4.0f;
+				if (score < best_enemy_score)
+				{
+					best_enemy_score = score;
+					best_enemy_unit = unit_iterator.index;
+				}
+			}
+		}
+		if (best_enemy_unit != NONE)
+		{
+			struct object_datum *enemy = object_get(best_enemy_unit);
+			real_point3d ground;
+			long surface_index = bots_unit_surface(best_enemy_unit, &ground);
+
+			if (surface_index == NONE)
+				surface_index = bots_surface_below(&enemy->object.position, &ground);
+			if (surface_index != NONE)
+			{
+				bot->hunting = TRUE;
+				bots_set_goal(bot, _bots_goal_roam, &ground, surface_index);
+				return;
+			}
+			if (bots_globals.roam_point_count > 0)
+			{
+				long index, nearest = NONE;
+				real nearest_distance = REAL_MAX;
+
+				for (index = 0; index < bots_globals.roam_point_count; index++)
+				{
+					real distance = bots_distance2d(&bots_globals.roam_points[index], &enemy->object.position) +
+						bots_random_real(bot) * 4.0f;
+
+					if (distance < nearest_distance &&
+						bots_distance2d(&bots_globals.roam_points[index], position) > 3.0f)
+					{
+						nearest_distance = distance;
+						nearest = index;
+					}
+				}
+				if (nearest != NONE)
+				{
+					bot->roam_index = (short)nearest;
+					bot->hunting = TRUE;
+					bots_set_goal(bot, _bots_goal_roam, &bots_globals.roam_points[nearest],
+						bots_globals.roam_surfaces[nearest]);
+					return;
+				}
+			}
+		}
+		if (human_unit_index != NONE)
+		{
+			if (human_distance > 5.0f)
+			{
+				real_point3d ground;
+				long surface_index = bots_unit_surface(human_unit_index, &ground);
+
+				if (surface_index != NONE)
+				{
+					bot->hunting = TRUE;
+					bots_set_goal(bot, _bots_goal_roam, &ground, surface_index);
+					return;
+				}
+			}
+			else if (!game_engine_running())
+			{
+				bot->goal_kind = _bots_goal_none;
+				return;
+			}
+		}
+	}
 	if (bots_globals.roam_point_count <= 0)
 		return;
-	bot->hunting = FALSE;
 	if (bots_random_real(bot) < bots_combat_hunt_chance(bots_globals.skill))
 	{
 		struct player_datum *player = player_get(bot->player_index);
@@ -4435,7 +4778,8 @@ static boolean bots_ctf_stand(long team_index, real_point3d *position)
 	struct scenario *scenario = global_scenario_get();
 	long index;
 
-	if (game_engine_get_variant()->game_engine_index == game_engine_ctf &&
+	if (game_engine_running() && game_engine_get_variant() &&
+		game_engine_get_variant()->game_engine_index == game_engine_ctf &&
 		game_engine_get_variant()->game_engine_variant.ctf.assault)
 	{
 		team_index = team_index ? 0 : 1;
@@ -4478,7 +4822,8 @@ all defend. */
 
 static boolean bots_ctf_active(void)
 {
-	return game_engine_running() && game_engine_get_variant()->game_engine_index == game_engine_ctf;
+	return game_engine_running() && game_engine_get_variant() &&
+		game_engine_get_variant()->game_engine_index == game_engine_ctf;
 }
 
 /* the flags' state, once a tick */
@@ -4695,7 +5040,8 @@ for all) with anyone on it every tick, contested or not:
 
 static boolean bots_king_active(void)
 {
-	return game_engine_running() && game_engine_get_variant()->game_engine_index == game_engine_king;
+	return game_engine_running() && game_engine_get_variant() &&
+		game_engine_get_variant()->game_engine_index == game_engine_king;
 }
 
 /* the hill, once a tick */
@@ -4977,7 +5323,7 @@ static boolean bots_vehicle_friendly_driver(long vehicle_index, struct player_da
 	long player_index = NONE;
 
 	*bot_driver = FALSE;
-	if (!game_engine_has_teams())
+	if (!bots_is_pve() && !game_engine_has_teams())
 		return FALSE;
 	if (vehicle->unit.driver_object_index != NONE)
 		player_index = unit_get(vehicle->unit.driver_object_index)->unit.player_index;
@@ -4998,7 +5344,7 @@ static boolean bots_vehicle_friendly_driver(long vehicle_index, struct player_da
 		}
 	}
 	if (player_index == NONE || !player_try_and_get(player_index) || player_get(player_index) == player ||
-		player_get(player_index)->team_index != player->team_index)
+		(!bots_is_pve() && player_get(player_index)->team_index != player->team_index))
 	{
 		return FALSE;
 	}
@@ -5298,7 +5644,7 @@ static void bots_choose_goal(struct bots_bot *bot, long player_index, real_point
 	}
 	/* (capture the flag's and king of the hill's bots go for the flags and
 	the hill, not after whom they last saw) */
-	if (!ctf && !king && !infection && !fighting && bot->target_player_index != NONE && bot->target_last_surface_index != NONE &&
+	if (!ctf && !king && !infection && !fighting && bots_target_unit(bot) != NONE && bot->target_last_surface_index != NONE &&
 		now - bot->target_seen_tick < TICKS_PER_SECOND * 8)
 	{
 		bots_set_goal(bot, _bots_goal_enemy, &bot->target_last_position, bot->target_last_surface_index);
@@ -5352,7 +5698,7 @@ static void bots_choose_goal(struct bots_bot *bot, long player_index, real_point
 			return;
 	}
 	if (bot->goal_kind != _bots_goal_roam || bots_distance2d(&bot->goal_point, position) < 1.5f ||
-		now - bot->goal_tick > TICKS_PER_SECOND * (bot->hunting ? 12 : 40))
+		now - bot->goal_tick > TICKS_PER_SECOND * (bots_is_pve() ? 2 : (bot->hunting ? 12 : 40)))
 	{
 		bots_pick_roam_goal(bot, position);
 	}
@@ -5537,6 +5883,7 @@ static void bots_bot_reset(struct bots_bot *bot, long player_index, long bot_ind
 	bot->player_index = player_index;
 	bot->unit_index = NONE;
 	bot->target_player_index = NONE;
+	bot->target_unit_index = NONE;
 	bot->target_last_surface_index = NONE;
 	bot->goal_surface_index = NONE;
 	bot->goal_serial = serial + 1;
@@ -5612,18 +5959,19 @@ static void bots_level_trail(struct bots_bot *bot, long now, real_point3d *aim_p
 {
 	struct bots_bot_combat *combat = &bot->combat;
 	long delay = bots_combat_track_delay_ticks(bots_globals.skill);
+	long target_unit_index = bots_target_unit(bot);
 	long slot;
 
 	if (now < 0)
 		return;
 	slot = now % BOTS_TRACK_TICKS;
 	combat->track[slot].tick = now;
-	combat->track[slot].player_index = bot->target_player_index;
+	combat->track[slot].player_index = target_unit_index;
 	combat->track[slot].point = *aim_point;
 	if (delay <= 0 || delay >= BOTS_TRACK_TICKS || now < delay)
 		return;
 	slot = (now - delay) % BOTS_TRACK_TICKS;
-	if (combat->track[slot].tick == now - delay && combat->track[slot].player_index == bot->target_player_index)
+	if (combat->track[slot].tick == now - delay && combat->track[slot].player_index == target_unit_index)
 		*aim_point = combat->track[slot].point;
 }
 
@@ -5971,7 +6319,7 @@ static void bots_level_prenade(struct bots_bot *bot, struct bots_tick *tick)
 	struct bots_bot_combat *combat = &bot->combat;
 	short skill = bots_globals.skill;
 	boolean has = tick->unit->unit.grenade_counts[0] > 0 || tick->unit->unit.grenade_counts[1] > 0;
-	struct player_datum *target;
+	long target_unit_index;
 	real_point3d point;
 	real seconds, distance;
 
@@ -5995,7 +6343,8 @@ static void bots_level_prenade(struct bots_bot *bot, struct bots_tick *tick)
 		}
 		return;
 	}
-	if (skill < _bots_skill_veteran || bot->target_player_index == NONE || bot->target_last_surface_index == NONE ||
+	target_unit_index = bots_target_unit(bot);
+	if (skill < _bots_skill_veteran || target_unit_index == NONE || bot->target_last_surface_index == NONE ||
 		combat->prenade_seen_tick == bot->target_seen_tick || !has || tick->now < bot->grenade_tick ||
 		tick->object->object.parent_object_index != NONE)
 	{
@@ -6009,10 +6358,8 @@ static void bots_level_prenade(struct bots_bot *bot, struct bots_tick *tick)
 	point = bot->target_last_position;
 	point.z += 0.3f;
 	distance = bots_distance3d(bots_tick_eye(tick), &point);
-	target = player_try_and_get(bot->target_player_index);
 	if (!bots_combat_prenade(skill, seconds, distance, has, bots_random_real(bot)) ||
-		!bots_line_of_sight(tick->player->unit_index, bots_tick_eye(tick), &point,
-			target && target->unit_index != NONE ? target->unit_index : NONE))
+		!bots_line_of_sight(tick->player->unit_index, bots_tick_eye(tick), &point, target_unit_index))
 	{
 		return;
 	}
@@ -6037,13 +6384,13 @@ static void bots_bot_look(struct bots_bot *bot, struct bots_tick *tick)
 			(unsigned long)tick->now));
 		if (target != NONE)
 		{
-			struct player_datum *target_player = player_get(target);
-			struct object_datum *target_object = object_get(target_player->unit_index);
+			struct unit_datum *target_unit = unit_get(target);
+			struct object_datum *target_object = object_get(target);
 			real_point3d ground;
 			long surface_index;
 
 			/* (a new target: the aim's error as it first turns to it) */
-			if (target != bot->target_player_index || tick->now - bot->target_seen_tick > TICKS_PER_SECOND * 2)
+			if (target != bot->target_unit_index || tick->now - bot->target_seen_tick > TICKS_PER_SECOND * 2)
 			{
 				real error = tick->skill->aim_error_degrees * BOTS_DEGREES;
 
@@ -6051,21 +6398,21 @@ static void bots_bot_look(struct bots_bot *bot, struct bots_tick *tick)
 				bot->aim_error_yaw = bots_random_signed(bot) * error;
 				bot->aim_error_pitch = bots_random_signed(bot) * error * 0.6f;
 			}
-			bot->target_player_index = target;
+			bot->target_unit_index = target;
+			bot->target_player_index = target_unit->unit.player_index;
 			bot->target_seen_tick = tick->now;
 			bot->target_last_position = target_object->object.position;
-			surface_index = bots_unit_surface(target_player->unit_index, &ground);
+			surface_index = bots_unit_surface(target, &ground);
 			if (surface_index != NONE)
 				bot->target_last_surface_index = surface_index;
 		}
 	}
-	if (bot->target_player_index != NONE)
+	if (bot->target_unit_index != NONE || bot->target_player_index != NONE)
 	{
-		struct player_datum *target_player = player_try_and_get(bot->target_player_index);
-
-		if (!target_player || target_player->unit_index == NONE ||
+		if (bots_target_unit(bot) == NONE ||
 			tick->now - bot->target_seen_tick > TICKS_PER_SECOND * 10)
 		{
+			bot->target_unit_index = NONE;
 			bot->target_player_index = NONE;
 		}
 	}
@@ -6076,15 +6423,19 @@ speed, leading, an error that settles), fire, a grenade, a blow, strafing */
 static void bots_bot_fight(struct bots_bot *bot, struct bots_tick *tick)
 {
 	struct bots_skill_definition const *skill = tick->skill;
-	struct player_datum *target_player = player_get(bot->target_player_index);
-	struct object_datum *target_object = object_get(target_player->unit_index);
-	real_point3d aim_point = target_object->object.bounding_sphere_center;
+	long target_unit_index = bots_target_unit(bot);
+	struct object_datum *target_object;
+	real_point3d aim_point;
 	boolean zombie = bots_zombie(tick->player);
 	long reaction_ticks = (long)(skill->reaction_seconds * TICKS_PER_SECOND);
 	long now = tick->now;
 	real desired_yaw, desired_pitch, dx, dy, dz, horizontal, turn, yaw_off, pitch_off, cone;
 	real settle = (real)exp(-1.0f / (skill->aim_settle_seconds * TICKS_PER_SECOND) * 1.1f);
 
+	if (target_unit_index == NONE)
+		return;
+	target_object = object_get(target_unit_index);
+	aim_point = target_object->object.bounding_sphere_center;
 	tick->fighting = TRUE;
 	/* (a reaction of 0.85 to 1.35 of the level's, another each sighting; the
 	aim trailing the target at the lowest levels, at the head or ahead of a
@@ -6092,7 +6443,7 @@ static void bots_bot_fight(struct bots_bot *bot, struct bots_tick *tick)
 	reaction_ticks = bots_combat_reaction_ticks(bots_globals.skill, reaction_ticks,
 		bots_combat_hash01((unsigned long)bot->player_index, (unsigned long)bot->target_first_seen_tick));
 	bots_level_trail(bot, now, &aim_point);
-	bots_level_aim_point(bot, tick, target_player->unit_index, &aim_point);
+	bots_level_aim_point(bot, tick, target_unit_index, &aim_point);
 	bots_tick_eye(tick);
 	/* where on the target: the head with a weapon whose headshots count (any
 	in SWAT, where a shot to the head kills; the pistol and the sniper rifle
@@ -6104,16 +6455,16 @@ static void bots_bot_fight(struct bots_bot *bot, struct bots_tick *tick)
 			bots_weapon_kind(weapon_get(tick->weapon_index)->definition_index)->aim : _bots_aim_body;
 		boolean swat = game_modes_mode() == _game_mode_swat;
 
-		if (bot->aim_choice_target != bot->target_player_index || now >= bot->aim_choice_until_tick)
+		if (bot->aim_choice_target != target_unit_index || now >= bot->aim_choice_until_tick)
 		{
-			bot->aim_choice_target = bot->target_player_index;
+			bot->aim_choice_target = target_unit_index;
 			bot->aim_choice_until_tick = now + TICKS_PER_SECOND * 2 + (long)(bots_random(bot) % TICKS_PER_SECOND);
 			bot->aim_head = bots_random_real(bot) < skill->headshot_chance;
 			bot->aim_feet = bots_random_real(bot) < skill->feet_chance;
 		}
 		if (bot->aim_head && (swat || (aim == _bots_aim_precision && target_object->object.shield_vitality <= 0.0f)))
 		{
-			unit_get_head_position(target_player->unit_index, &aim_point);
+			unit_get_head_position(target_unit_index, &aim_point);
 		}
 		else if (bot->aim_feet && aim == _bots_aim_explosive && aim_point.z <= tick->eye.z + 0.3f)
 		{
@@ -6196,7 +6547,7 @@ static void bots_bot_fight(struct bots_bot *bot, struct bots_tick *tick)
 	/* a blow close up: a zombie's (its skull's) a little further and more
 	often, its only one; else the level's reach, its moment and its wait */
 	if (zombie ? tick->target_distance < 1.6f && now >= bot->melee_tick :
-		bots_level_melee(bot, tick, target_player->unit_index))
+		bots_level_melee(bot, tick, target_unit_index))
 	{
 		tick->flags |= FLAG(_unit_control_use_equipment_bit);
 		bot->melee_tick = now + (zombie ? TICKS_PER_SECOND / 2 :
@@ -6226,7 +6577,7 @@ static void bots_bot_fight(struct bots_bot *bot, struct bots_tick *tick)
 			forward = 1.0f;
 			side *= 0.2f;
 		}
-		else if (infection_enabled() && infection_unit_is_zombie(target_player->unit_index) &&
+		else if (infection_enabled() && infection_unit_is_zombie(target_unit_index) &&
 			tick->target_distance < 7.0f)
 		{
 			forward = -1.0f;
@@ -6492,8 +6843,8 @@ static boolean bots_seat_take_over(struct bots_bot const *bot, struct bots_bot c
 {
 	struct object_datum *unit = object_try_and_get(other->unit_index);
 
-	return unit && game_engine_has_teams() &&
-		player_get(other->player_index)->team_index == player_get(bot->player_index)->team_index &&
+	return unit && (bots_is_pve() || (game_engine_has_teams() &&
+		player_get(other->player_index)->team_index == player_get(bot->player_index)->team_index)) &&
 		bots_distance2d(&unit->object.position, &object_get(vehicle_index)->object.position) >
 			distance + BOTS_VEHICLE_TAKE_OVER;
 }
@@ -6538,7 +6889,7 @@ static void bots_vehicle_consider(struct bots_bot *bot, struct bots_tick *tick)
 		return;
 	}
 	goal_distance = bots_distance2d(&bot->goal_point, &tick->position);
-	if (goal_distance < BOTS_VEHICLE_GOAL_DISTANCE)
+	if (goal_distance < BOTS_VEHICLE_GOAL_DISTANCE && game_engine_running())
 		return;
 	fresh = now - bot->spawn_tick < TICKS_PER_SECOND * BOTS_VEHICLE_FRESH_SECONDS;
 	object_iterator_new(&iterator, _object_mask_vehicle, 0);
@@ -6561,7 +6912,10 @@ static void bots_vehicle_consider(struct bots_bot *bot, struct bots_tick *tick)
 		close = fresh ? MAX(bots_vehicle_worths[kind].close + 10.0f, 15.0f) : bots_vehicle_worths[kind].close;
 		reach = MIN(bots_vehicle_worths[kind].reach, MAX(close, goal_distance * bots_vehicle_worths[kind].share));
 		distance = bots_distance2d(&vehicle->object.position, &tick->position);
-		if (distance > reach || (distance > close &&
+		friendly_driver = bots_vehicle_friendly_driver(iterator.index, tick->player, &bot_driver);
+		if (goal_distance < BOTS_VEHICLE_GOAL_DISTANCE && (!friendly_driver || bot_driver))
+			continue;
+		if (distance > reach || (distance > close && !(friendly_driver && !bot_driver) &&
 			bots_distance2d(&vehicle->object.position, &bot->goal_point) > goal_distance + bots_vehicle_worths[kind].slack))
 		{
 			continue;
@@ -6581,7 +6935,6 @@ static void bots_vehicle_consider(struct bots_bot *bot, struct bots_tick *tick)
 			continue;
 		}
 		speed = magnitude3d(&vehicle->object.translational_velocity);
-		friendly_driver = bots_vehicle_friendly_driver(iterator.index, tick->player, &bot_driver);
 		definition = unit_definition_get(vehicle->definition_index);
 		for (seat_index = 0; seat_index < definition->unit.seats.count; seat_index++)
 		{
@@ -6662,7 +7015,7 @@ static void bots_turret_consider(struct bots_bot *bot, struct bots_tick *tick)
 	real best_distance = BOTS_TURRET_REACH;
 
 	if (bots_globals.turret_count <= 0 || bot->vehicle_index != NONE || now < bot->turret_check_tick ||
-		now < bot->vehicle_rest_until_tick || bot->held_objective || bot->target_player_index == NONE ||
+		now < bot->vehicle_rest_until_tick || bot->held_objective || bots_target_unit(bot) == NONE ||
 		now - bot->target_seen_tick > TICKS_PER_SECOND * 5 ||
 		(bot->goal_kind == _bots_goal_item && bot->item_powerup != _bots_powerup_none))
 	{
@@ -6920,7 +7273,8 @@ static void bots_bot_drive(struct bots_bot *bot, struct bots_tick *tick, long ve
 	struct unit_datum *vehicle = unit_get(vehicle_index);
 	long now = tick->now;
 	real direction = bot->yaw;
-	boolean fighting = bot->target_player_index != NONE && now - bot->target_seen_tick <= TICKS_PER_SECOND / 2;
+	long target_unit_index = bots_target_unit(bot);
+	boolean fighting = target_unit_index != NONE && now - bot->target_seen_tick <= TICKS_PER_SECOND / 2;
 
 	if (now - bot->ride_stuck_tick >= TICKS_PER_SECOND)
 	{
@@ -7047,7 +7401,7 @@ static void bots_bot_drive(struct bots_bot *bot, struct bots_tick *tick, long ve
 		fighting = FALSE;
 	if (fighting)
 	{
-		struct object_datum *target = object_get(player_get(bot->target_player_index)->unit_index);
+		struct object_datum *target = object_get(target_unit_index);
 		real to_target = (real)atan2(target->object.position.y - tick->position.y, target->object.position.x - tick->position.x);
 		real distance = bots_distance2d(&target->object.position, &tick->position);
 
@@ -7093,10 +7447,10 @@ static void bots_bot_drive(struct bots_bot *bot, struct bots_tick *tick, long ve
 	}
 	/* (the gun the driver's, an enemy in sight before it as it drives on:
 	fired) */
-	if (gunner && bot->target_player_index != NONE && now - bot->target_seen_tick <= TICKS_PER_SECOND / 2 &&
+	if (gunner && target_unit_index != NONE && now - bot->target_seen_tick <= TICKS_PER_SECOND / 2 &&
 		now - bot->target_first_seen_tick >= (long)(tick->skill->reaction_seconds * TICKS_PER_SECOND))
 	{
-		struct object_datum *target = object_get(player_get(bot->target_player_index)->unit_index);
+		struct object_datum *target = object_get(target_unit_index);
 
 		if (fabs(bots_angle_difference((real)atan2(target->object.position.y - tick->position.y,
 			target->object.position.x - tick->position.x), bot->yaw)) < 8.0f * BOTS_DEGREES)
@@ -7110,7 +7464,8 @@ static void bots_bot_drive(struct bots_bot *bot, struct bots_tick *tick, long ve
 bring home, a hill, the ball), but a race's checkpoints, driven through */
 static boolean bots_goal_on_foot(struct bots_bot *bot)
 {
-	return bot->goal_kind == _bots_goal_objective && game_engine_get_variant()->game_engine_index != game_engine_race;
+	return bot->goal_kind == _bots_goal_objective &&
+		(!game_engine_running() || !game_engine_get_variant() || game_engine_get_variant()->game_engine_index != game_engine_race);
 }
 
 /* port: on a turret: fighting from it the enemy it sees (the turret turns
@@ -7126,10 +7481,11 @@ static short bots_bot_turret(struct bots_bot *bot, struct bots_tick *tick, long 
 {
 	struct unit_datum *vehicle = unit_get(vehicle_index);
 	long now = tick->now;
+	long target_unit_index = bots_target_unit(bot);
 
-	if (bot->target_player_index != NONE && now - bot->target_seen_tick <= TICKS_PER_SECOND / 2)
+	if (target_unit_index != NONE && now - bot->target_seen_tick <= TICKS_PER_SECOND / 2)
 	{
-		struct object_datum *target = object_get(player_get(bot->target_player_index)->unit_index);
+		struct object_datum *target = object_get(target_unit_index);
 		real_vector3d to_target;
 		real length, aim;
 
@@ -7171,7 +7527,7 @@ static short bots_bot_turret(struct bots_bot *bot, struct bots_tick *tick, long 
 	{
 		/* (towards where the enemy was last seen, else about) */
 		real heading = (real)atan2(vehicle->object.forward.j, vehicle->object.forward.i);
-		real look = bot->target_player_index != NONE ?
+		real look = target_unit_index != NONE ?
 			(real)atan2(bot->target_last_position.y - tick->position.y, bot->target_last_position.x - tick->position.x) :
 			heading + (real)sin((real)(now + (long)(bot - bots_globals.bots) * 37) / 40.0f) * 1.0f;
 
@@ -7330,7 +7686,7 @@ static void bots_bot_ride(struct bots_bot *bot, struct bots_tick *tick, long veh
 		;
 	else if (driver)
 		bots_bot_drive(bot, tick, vehicle_index, gunner);
-	else if (bot->target_player_index != NONE && now - bot->target_seen_tick <= TICKS_PER_SECOND / 2)
+	else if (bots_target_unit(bot) != NONE && now - bot->target_seen_tick <= TICKS_PER_SECOND / 2)
 	{
 		bots_bot_fight(bot, tick);
 		tick->moving = FALSE;
@@ -7519,7 +7875,7 @@ static void bots_bot_trace(struct bots_bot *bot, long bot_index, struct bots_tic
 		bot->goal_point.x, bot->goal_point.y, bot->goal_point.z, bot->goal_surface_index,
 		bot->path.valid ? "yes" : "no", (int)bot->path.step_index, (int)bot->path.step_count,
 		bot->path.steps_finish_path ? " (all)" : "",
-		bot->target_player_index == NONE ? -1L : (long)DATUM_INDEX_TO_ABSOLUTE_INDEX(bot->target_player_index),
+		bots_target_unit(bot) == NONE ? -1L : (long)DATUM_INDEX_TO_ABSOLUTE_INDEX(bots_target_unit(bot)),
 		now - bot->target_seen_tick, tick->fighting ? " fighting" : "", (int)bot->stuck_count,
 		bot->yaw / BOTS_DEGREES, tick->action->throttle.i, tick->action->throttle.j, tick->action->control_flags,
 		bot->search_slot, bot->path_failures);
@@ -7641,6 +7997,7 @@ static void bots_bot_update(struct bots_bot *bot, long bot_index, struct player_
 		bots_search_take(bot, FALSE);
 		bot->unit_index = NONE;
 		bot->target_player_index = NONE;
+		bot->target_unit_index = NONE;
 		bot->path.valid = FALSE;
 		bot->goal_kind = _bots_goal_none;
 		bot->previous_control_flags = 0;
@@ -7735,7 +8092,8 @@ static void bots_bot_update(struct bots_bot *bot, long bot_index, struct player_
 		if (tick.weapon_index != NONE &&
 			(weapon_is_flag(tick.weapon_index) || bots_weapon_value(weapon_get(tick.weapon_index)->definition_index) < 0))
 		{
-			held = game_engine_get_variant()->game_engine_index == game_engine_ctf ? 1 : 2;
+			held = (game_engine_running() && game_engine_get_variant() &&
+				game_engine_get_variant()->game_engine_index == game_engine_ctf) ? 1 : 2;
 		}
 		if (held && held != bot->held_objective)
 		{
@@ -7747,7 +8105,8 @@ static void bots_bot_update(struct bots_bot *bot, long bot_index, struct player_
 		bot->held_objective = held;
 	}
 	/* (CTF: at the other team's stand, once a visit; halo.log's count) */
-	if (game_engine_get_variant()->game_engine_index == game_engine_ctf && (tick.now % 10) == (bot_index % 10))
+	if (game_engine_running() && game_engine_get_variant() &&
+		game_engine_get_variant()->game_engine_index == game_engine_ctf && (tick.now % 10) == (bot_index % 10))
 	{
 		real_point3d stand;
 		boolean at = bots_ctf_stand(tick.player->team_index ? 0 : 1, &stand) &&
@@ -7771,7 +8130,7 @@ static void bots_bot_update(struct bots_bot *bot, long bot_index, struct player_
 		/* (carrying a flag: home, fighting only what stands in its way) */
 		boolean carrying = bots_ctf_carrying(bot);
 
-		if (bot->target_player_index != NONE && tick.now - bot->target_seen_tick <= TICKS_PER_SECOND / 2 &&
+		if (bots_target_unit(bot) != NONE && tick.now - bot->target_seen_tick <= TICKS_PER_SECOND / 2 &&
 			(!carrying || bots_distance3d(&tick.position, &bot->target_last_position) < 2.0f))
 		{
 			bots_bot_fight(bot, &tick);
@@ -8071,7 +8430,7 @@ void bots_update_actions(struct player_action *actions)
 	long count = 0;
 
 	/* (the host's alone: a client drives the bots with the input it relays) */
-	if (!game_engine_running() || !bots_game_allowed())
+	if (!bots_game_allowed())
 		return;
 	started = bots_time_us();
 	bots_profile_enabled();
@@ -8092,7 +8451,7 @@ void bots_update_actions(struct player_action *actions)
 		/* (the helper thread and the roaming places once a game has bots) */
 		if (!bots_helper.started)
 			bots_helper_start();
-		if (!bots_globals.map_ready)
+		if (!bots_globals.map_ready || bots_globals.prepared_bsp_index != global_structure_bsp_index_get())
 			bots_prepare_map();
 		if (!count)
 		{

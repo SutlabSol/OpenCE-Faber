@@ -14,9 +14,9 @@
 extern "C" {
 #endif
 
-/* ---------- Forge Release Version & Network Protocol Isolation (v1.1.1, 0x4628) */
+/* ---------- Forge Release Version & Network Protocol Isolation (v2.2.2, 0x4628) */
 
-#define FORGE_VERSION_STRING "1.1.1"
+#define FORGE_VERSION_STRING "2.2.2"
 #define FORGE_NETWORK_VERSION 0x4628
 /* Standard (non-Forge) sessions use OpenCE's own HALO_PORT_NETWORK_VERSION
  * (port/linux/include/halo_port_limits.h), read in forge_get_network_version(),
@@ -28,6 +28,7 @@ long forge_get_network_version(void);
 
 /* Engine function (source/main/main.h) used by several Forge modules */
 char *main_get_map_name(void);
+char const *forge_get_active_map_name(void);
 
 #ifdef _WIN32
 __declspec(dllimport) short __stdcall GetAsyncKeyState(int vKey);
@@ -83,7 +84,7 @@ enum forge_ui_modal
 	_forge_modal_none = 0,
 	_forge_modal_spawn_palette,
 	_forge_modal_object_properties,
-	_forge_modal_inject_custom_tags,
+
 	_forge_modal_save_copy_as
 };
 
@@ -113,6 +114,51 @@ enum forge_snap_angle_mode
 	NUMBER_OF_FORGE_SNAP_MODES
 };
 
+/* ---------- Firefight Custom Spawn Marker ('ffsp' / netgame_flag type 15) */
+
+#define FORGE_NETGAME_FLAG_FIREFIGHT_SPAWN 15
+
+enum forge_ff_spawn_type
+{
+	_forge_ff_spawn_ai_infantry_only = 0,   /* Standard enemy infantry wave spawn */
+	_forge_ff_spawn_ai_and_vehicles = 1,    /* Enemy infantry + approved enemy vehicles */
+	_forge_ff_spawn_enemy_vehicle_only = 2, /* Approved enemy vehicle spawn (Ghost/Wraith/Banshee/Scorpion) */
+	_forge_ff_spawn_enemy_ghost_only = 3,   /* Approved Enemy Ghost spawn */
+	_forge_ff_spawn_enemy_heavy_veh = 4,    /* Approved Enemy Wraith / Scorpion / Banshee spawn */
+	_forge_ff_spawn_dropship_zone = 5,      /* Approved Covenant Spirit / Pelican dropship zone */
+	_forge_ff_spawn_player_vehicle = 6,     /* Approved Player Vehicle Pad (Round 4 Warthog / Round 5 Scorpion) */
+	NUMBER_OF_FORGE_FF_SPAWN_TYPES = 7
+};
+
+enum forge_ff_round_filter
+{
+	_forge_ff_round_all = 0,       /* All Rounds */
+	_forge_ff_round_1_only = 1,    /* Round 1 Only */
+	_forge_ff_round_2_only = 2,    /* Round 2 Only */
+	_forge_ff_round_3_only = 3,    /* Round 3 Only */
+	_forge_ff_round_4_only = 4,    /* Round 4 Only */
+	_forge_ff_round_5_only = 5,    /* Round 5 Only */
+	_forge_ff_round_early_1_3 = 6, /* Rounds 1-3 (Early) */
+	_forge_ff_round_late_4_5 = 7,  /* Rounds 4-5 (Late) */
+	_forge_ff_round_bonus = 8,     /* Bonus Round Only */
+	NUMBER_OF_FORGE_FF_ROUND_FILTERS = 9
+};
+
+enum forge_ff_wave_filter
+{
+	_forge_ff_wave_all = 0,        /* All Waves (1-3) */
+	_forge_ff_wave_1_only = 1,     /* Wave 1 Only (Initial) */
+	_forge_ff_wave_2_only = 2,     /* Wave 2 Only (Reinforcements) */
+	_forge_ff_wave_3_boss = 3,     /* Wave 3 Only (Boss Wave) */
+	NUMBER_OF_FORGE_FF_WAVE_FILTERS = 4
+};
+
+#define FORGE_FF_PACK_USAGE(type, rnd, wav) \
+	((int16_t)((((int)(type)) & 0x0F) | ((((int)(rnd)) & 0x0F) << 4) | ((((int)(wav)) & 0x0F) << 8)))
+#define FORGE_FF_UNPACK_TYPE(u)  (((int)(u)) & 0x0F)
+#define FORGE_FF_UNPACK_ROUND(u) ((((int)(u)) >> 4) & 0x0F)
+#define FORGE_FF_UNPACK_WAVE(u)  ((((int)(u)) >> 8) & 0x0F)
+
 /* ---------- Runtime Palette Catalog Entry */
 
 struct forge_catalog_entry
@@ -126,7 +172,6 @@ struct forge_catalog_entry
 };
 
 #define FORGE_MAX_CATALOG_ENTRIES 2048
-#define FORGE_MAX_DONOR_MAPS_LIST 128
 
 /* ---------- Live Placed Instance Tracking */
 
@@ -152,6 +197,55 @@ struct forge_live_instance
 };
 
 #define FORGE_MAX_LIVE_INSTANCES 1024
+
+/* ---------- 3D Snap Point Configuration Per Tag */
+
+#define FORGE_MAX_SNAP_POINTS_PER_TAG 16
+#define FORGE_MAX_SNAP_TAG_CONFIGS    512
+
+enum forge_snap_normal_dir
+{
+	_forge_snap_dir_front = 0,  /* +X (1, 0, 0) */
+	_forge_snap_dir_right = 1,  /* -Y (0, -1, 0) */
+	_forge_snap_dir_back  = 2,  /* -X (-1, 0, 0) */
+	_forge_snap_dir_left  = 3,  /* +Y (0, 1, 0) */
+	_forge_snap_dir_up    = 4,  /* +Z (0, 0, 1) */
+	_forge_snap_dir_down  = 5,  /* -Z (0, 0, -1) */
+	NUMBER_OF_FORGE_SNAP_DIRS
+};
+
+enum forge_snap_preset_id
+{
+	_forge_snap_preset_custom       = 0,
+	_forge_snap_preset_front_center = 1,
+	_forge_snap_preset_back_center  = 2,
+	_forge_snap_preset_left_center  = 3,
+	_forge_snap_preset_right_center = 4,
+	_forge_snap_preset_top_center   = 5,
+	_forge_snap_preset_bot_center   = 6,
+	_forge_snap_preset_front_base   = 7,
+	_forge_snap_preset_back_base    = 8,
+	_forge_snap_preset_left_base    = 9,
+	_forge_snap_preset_right_base   = 10,
+	NUMBER_OF_FORGE_SNAP_PRESETS
+};
+
+struct forge_snap_point
+{
+	float x, y, z;
+	float nx, ny, nz;
+	uint8_t normal_dir;
+	uint8_t preset_id;
+	uint16_t pad;
+};
+
+struct forge_tag_snap_config
+{
+	uint32_t group_tag;
+	char tag_path[FORGE_TAG_PATH_MAX];
+	int point_count;
+	struct forge_snap_point points[FORGE_MAX_SNAP_POINTS_PER_TAG];
+};
 
 /* ---------- Global Runtime Forge State */
 
@@ -179,8 +273,8 @@ struct forge_runtime_state
 	int32_t grabbed_object_index;
 	int32_t grabbed_live_index;
 	int grabbed_is_new_spawn;
-	float grab_orig_x, grab_orig_y, grab_orig_z;
-	float grab_orig_yaw, grab_orig_pitch, grab_orig_roll;
+	float grabbed_orig_x, grabbed_orig_y, grabbed_orig_z;
+	float grabbed_orig_yaw, grabbed_orig_pitch, grabbed_orig_roll;
 	float grab_distance;
 	float grab_yaw, grab_pitch, grab_roll;
 	int32_t hovered_object_index;
@@ -195,14 +289,9 @@ struct forge_runtime_state
 	float koth_group_radius;
 	int32_t koth_group_live_indices[10];
 
-	/* Catalogs from cached_tags / forgeasset.map (0) and customforgeasset.map (1) */
+	/* Catalogs: 0 = map-local [MAP] (transient), 1 = stock cached_tags, 2 = custom cached_tags [C] */
 	struct forge_catalog_entry catalog[FORGE_MAX_CATALOG_ENTRIES];
 	int catalog_count;
-
-	/* Donor maps list for "Inject Custom Tags" modal */
-	char donor_map_files[FORGE_MAX_DONOR_MAPS_LIST][256];
-	int donor_map_count;
-	int donor_map_cursor;
 
 	/* Save Map state: prompts for name on initial save, then quick-updates on subsequent saves */
 	int has_saved_map_once;
@@ -220,8 +309,8 @@ struct forge_runtime_state
 
 	/* Forge Controls & Controller State */
 	int using_controller;
-	int bind_vk[10];
-	int bind_gp[10];
+	int bind_vk[16];
+	int bind_gp[16];
 	float controller_look_sens;
 	float controller_fly_speed;
 
@@ -235,6 +324,11 @@ struct forge_runtime_state
 	float player_monitor_render_pos[128][3];
 	float player_monitor_render_yaw[128];
 	float player_monitor_render_pitch[128];
+
+	/* 3D Magnetic Snap Point Lock State */
+	int snap_point_locked;
+	float snap_lock_world_x, snap_lock_world_y, snap_lock_world_z;
+	char snap_lock_label[64];
 };
 
 enum forge_bind_action
@@ -249,7 +343,8 @@ enum forge_bind_action
 	FORGE_BIND_ROT_SNAP = 7,
 	FORGE_BIND_OBJECT_OPTIONS = 8,
 	FORGE_BIND_DELETE_OBJECT = 9,
-	FORGE_BIND_COUNT = 10
+	FORGE_BIND_COPY_OBJECT = 10,
+	FORGE_BIND_COUNT = 11
 };
 
 enum forge_gamepad_button
@@ -274,6 +369,13 @@ enum forge_gamepad_button
 	FORGE_GP_COUNT = 17
 };
 
+#define FORGE_GP_RB     FORGE_GP_BLACK
+#define FORGE_GP_LB     FORGE_GP_WHITE
+#define FORGE_GP_LT     FORGE_GP_LTRIGGER
+#define FORGE_GP_RT     FORGE_GP_RTRIGGER
+#define FORGE_GP_LSTICK FORGE_GP_LTHUMB
+#define FORGE_GP_RSTICK FORGE_GP_RTHUMB
+
 extern struct forge_runtime_state g_forge;
 
 void forge_controls_init_defaults(void);
@@ -294,12 +396,19 @@ void forge_runtime_reload_catalogs(void);
 int forge_is_multiplayer_session(void);
 int forge_catalog_entry_allowed(struct forge_catalog_entry const *entry);
 long forge_resolve_engine_tag(uint32_t group_tag, char const *tag_path, uint32_t *out_actual_group);
-int forge_ui_inject_custom_map(char const *donor_map_path);
-int forge_clear_custom_tag_cache(void);
-int forge_reset_all_tag_caches_and_restart(void);
+uint32_t forge_get_base_map_tag_count(void);
 int forge_ui_save_copy_as(char const *new_map_name);
 void forge_trigger_save_map_action(void);
 void forge_load_saved_map_state_if_present(char const *map_name);
+int forge_cache_active_map_tag(uint32_t group_tag, char const *tag_path);
+int forge_add_custom_map_tag_to_cache(
+	char const *donor_map_path,
+	char const *maps_dir,
+	uint32_t root_group,
+	char const *root_tag_path,
+	char const *user_custom_name);
+void forge_normalize_mcc_hud_tags(void);
+int forge_is_mcc_hud_active(void);
 void forge_set_status(char const *fmt, ...);
 void forge_draw_screen_rect(short x0, short y0, short x1, short y1, uint32_t argb);
 int forge_monitor_render_player_unit(long object_index, void const *lighting, unsigned long flags);
@@ -312,7 +421,6 @@ int32_t forge_ai_spawn_unit_live(
 	float x, float y, float z, float yaw,
 	int16_t team_designator,
 	int32_t *out_unit_index);
-void forge_ai_clear_all_live(void);
 
 /* ---------- Prototypes: forge_3d_mode.c */
 
@@ -338,6 +446,8 @@ void forge_render_begin_monitor_visibility(void);
 void forge_render_end_monitor_visibility(void);
 void forge_apply_host_player_monitor_state(int player_abs_idx, int is_monitor, float x, float y, float z, float yaw, float pitch);
 int32_t forge_3d_adopt_or_find_object_instance(long object_index);
+void forge_cancel_or_release_held_item(void);
+int forge_has_held_item_to_cancel(void);
 
 /* ---------- Prototypes: forge_network.c */
 
@@ -370,6 +480,33 @@ void forge_network_post_handle_object_changes(void const *entries, short count);
 void forge_runtime_on_map_unload(void);
 int forge_window_is_focused(void);
 short forge_key_state(int vk);
+
+int forge_get_readable_donor_map_path(char const *map_path, char *out_path, size_t out_sz);
+struct bitmap_data *forge_tag_preview_get_bitmap(void);
+void forge_tag_preview_clear(void);
+void forge_tag_preview_set_map_tag(char const *map_path, uint32_t group_tag, char const *tag_path);
+void forge_tag_preview_set_installed_tag(uint32_t group_tag, char const *tag_path, int is_custom);
+uint32_t forge_tag_preview_get_current_size_bytes(void);
+int forge_extract_tag_from_donor_map_to_ocetags(
+	char const *donor_map_path,
+	uint32_t root_group,
+	char const *root_tag_path,
+	char const *user_custom_name);
+int forge_delete_installed_tag_entry(uint32_t group_tag, char const *tag_path, int is_custom);
+int forge_reset_stock_tags_only(void);
+int forge_reset_custom_tags_only(void);
+
+/* ---------- 3D Snap Point Persistence & Preview Editor API */
+
+void forge_snap_points_load_all(void);
+int forge_snap_points_save_all(void);
+struct forge_tag_snap_config *forge_snap_points_get_for_tag(uint32_t group_tag, char const *tag_path, int create_if_missing);
+int forge_snap_points_count_for_tag(uint32_t group_tag, char const *tag_path);
+void forge_snap_points_get_preview_bounds(float out_min[3], float out_max[3]);
+void forge_snap_points_set_editor_overlay(int active, uint32_t group_tag, char const *tag_path, int active_pt_idx, float cam_yaw_deg, float cam_pitch_deg, float cam_zoom);
+void forge_snap_points_auto_generate(uint32_t group_tag, char const *tag_path, int mode);
+void forge_snap_points_apply_preset_to_point(struct forge_snap_point *pt, int preset_id, int normal_dir);
+void forge_snap_points_fill_normal_from_dir(struct forge_snap_point *pt, int normal_dir);
 
 #ifdef _WIN32
 #undef GetAsyncKeyState

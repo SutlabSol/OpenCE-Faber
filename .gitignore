@@ -18,6 +18,12 @@ build.ninja
 compile_commands.json
 halo.log
 device_identity.txt
+config.toml
+SDL3.dll
+brokers.txt
+masters.txt
+OpenCE Forge/
+forge_maps/
 
 # The January build and the Xbox SDK (tools/xdk_headers.py reads the
 # build's PDB); never commit

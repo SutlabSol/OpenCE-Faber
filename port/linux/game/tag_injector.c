@@ -108,6 +108,9 @@ enum
 	VEHICLE_GROUP_TAG = 'vehi',
 	BIPED_GROUP_TAG = 'bipd',
 	SCENERY_GROUP_TAG = 'scen',
+	MACHINE_GROUP_TAG = 'mach',
+	CONTROL_GROUP_TAG = 'ctrl',
+	LIGHT_FIXTURE_GROUP_TAG = 'lifi',
 	SHADER_MODEL_GROUP_TAG = 'soso',
 	SHADER_ENVIRONMENT_GROUP_TAG = 'senv',
 
@@ -115,8 +118,8 @@ enum
 	MAXIMUM_TAG_INJECTOR_MAPS = 512,
 	/* the most bytes of bundles' tags a level holds (their pixels, samples
 	and vertices are read from their files), and bundles */
-	MAXIMUM_INJECTED_BYTES = 0x4000000,
-	MAXIMUM_INJECTED_BUNDLES = 64,
+	MAXIMUM_INJECTED_BYTES = 0x8000000,
+	MAXIMUM_INJECTED_BUNDLES = 128,
 	/* the tags of a level, as datum indices count them */
 	MAXIMUM_TAG_COUNT = 0xFFFF,
 	MAXIMUM_WALK_DEPTH = 32,
@@ -458,10 +461,22 @@ static struct
 	{ "WEAPONS", 'weap', TRUE },
 	{ "AI", 'actv', TRUE },
 	{ "EQUIPMENT", 'eqip', TRUE },
-	{ "VEHICLES", 'vehi', FALSE },
-	{ "BIPEDS", 'bipd', FALSE },
-	{ "SCENERY", 'scen', FALSE },
+	{ "VEHICLES", 'vehi', TRUE },
+	{ "BIPEDS", 'bipd', TRUE },
+	{ "SCENERY", 'scen', TRUE },
+	{ "DOORS & DEVICES", 'mach', TRUE },
 };
+
+boolean tag_injector_group_in_category(
+	unsigned long group_tag,
+	short category)
+{
+	if (category < 0 || category >= NUMBER_OF_TAG_INJECTOR_CATEGORIES)
+		return FALSE;
+	if (category == _tag_injector_devices)
+		return group_tag == MACHINE_GROUP_TAG || group_tag == CONTROL_GROUP_TAG || group_tag == LIGHT_FIXTURE_GROUP_TAG;
+	return group_tag == tag_injector_categories[category].group_tag;
+}
 
 /* the menu's: the maps, the map open, and its tags of each category (their
 absolute indices), each one's size (TAG_SIZE_UNKNOWN until asked) and the
@@ -800,13 +815,23 @@ static boolean bundle_weapons_holdable(
 	struct injected_bundle *bundle)
 {
 	long bundle_index;
+	unsigned long root_group;
 
 	bundle->drops_weapons = FALSE;
+	if (bundle->loaded.tag_count <= 0)
+		return TRUE;
+	root_group = bundle_tag_group(&bundle->loaded, 0);
+	/* A vehicle's sub-tag weapons are mounted vehicle turrets/guns (driven in 3rd-person, never held in 1st-person hands) */
+	if (root_group == VEHICLE_GROUP_TAG || root_group == SCENERY_GROUP_TAG ||
+		root_group == MACHINE_GROUP_TAG || root_group == CONTROL_GROUP_TAG || root_group == LIGHT_FIXTURE_GROUP_TAG)
+	{
+		return TRUE;
+	}
 	for (bundle_index = 0; bundle_index < bundle->loaded.tag_count; bundle_index++)
 	{
 		if (!bundle_weapon_unholdable(bundle, bundle_index))
 			continue;
-		if (bundle_index > 0 && bundle_tag_group(&bundle->loaded, 0) == 'actv')
+		if (bundle_index > 0 && (root_group == 'actv' || root_group == BIPED_GROUP_TAG))
 		{
 			error(_error_silent, "tag injector: the weapon '%s' has no first-person model or animations: %s is added "
 				"without it", bundle_tag_name(&bundle->loaded, bundle_index), bundle_tag_name(&bundle->loaded, 0));
@@ -1564,7 +1589,7 @@ boolean tag_injector_map_open(
 		long count = 0;
 
 		for (absolute = 0; absolute < header->tag_count; absolute++)
-			count += (unsigned long)header->instances[absolute].group_tag == tag_injector_categories[category].group_tag;
+			count += tag_injector_group_in_category((unsigned long)header->instances[absolute].group_tag, category);
 		tag_injector_menu.tags[category] = malloc((unsigned long)(count + 1) * sizeof(long));
 		tag_injector_menu.sizes[category] = malloc((unsigned long)(count + 1) * sizeof(long));
 		tag_injector_menu.problems[category] = malloc((unsigned long)(count + 1) * sizeof(long));
@@ -1576,7 +1601,7 @@ boolean tag_injector_map_open(
 		}
 		for (absolute = 0; absolute < header->tag_count; absolute++)
 		{
-			if ((unsigned long)header->instances[absolute].group_tag == tag_injector_categories[category].group_tag)
+			if (tag_injector_group_in_category((unsigned long)header->instances[absolute].group_tag, category))
 			{
 				long index = tag_injector_menu.tag_counts[category]++;
 
@@ -1727,9 +1752,12 @@ long tag_injector_tag_in_profile(
 	long index)
 {
 	long absolute = menu_tag(category, index);
+	unsigned long group_tag;
 
-	return absolute == NONE ? NONE :
-		port_tag_profiles_tag_find(profile, tag_injector_categories[category].group_tag, menu_tag_name(absolute));
+	if (absolute == NONE || !tag_injector_menu.header)
+		return NONE;
+	group_tag = (unsigned long)tag_injector_menu.header->instances[absolute].group_tag;
+	return port_tag_profiles_tag_find(profile, group_tag, menu_tag_name(absolute));
 }
 
 boolean tag_injector_tag_add(
@@ -1796,7 +1824,7 @@ boolean tag_injector_tag_add(
 	if (header)
 		menu_names_restore(header);
 	if (!header || header->tag_count != tag_count ||
-		(unsigned long)header->instances[absolute].group_tag != tag_injector_categories[category].group_tag ||
+		!tag_injector_group_in_category((unsigned long)header->instances[absolute].group_tag, category) ||
 		_stricmp(menu_tag_name(absolute), name))
 	{
 		/* (the file changed under the menu: what it lists is gone) */
@@ -1809,7 +1837,7 @@ boolean tag_injector_tag_add(
 	custom_edition_cache_bundle_source(&source);
 	tag_bundle_write(&source, absolute, bundle_buffer_write, &buffer, &report);
 	added = report.status == _tag_bundle_status_ok &&
-		profile_bundle_add(profile, tag_injector_menu.map_name, tag_injector_categories[category].group_tag,
+		profile_bundle_add(profile, tag_injector_menu.map_name, (unsigned long)header->instances[absolute].group_tag,
 			name, buffer.bytes, buffer.size);
 	if (report.status != _tag_bundle_status_ok)
 	{
@@ -2340,7 +2368,8 @@ static boolean preview_mesh_build(
 	if (root && group_tag == ACTOR_VARIANT_GROUP_TAG)
 		root = preview_tag(source, ((struct actor_variant_definition const *)root)->unit_reference.index, &group_tag);
 	if (!root || (group_tag != WEAPON_DEFINITION_TAG && group_tag != EQUIPMENT_GROUP_TAG && group_tag != VEHICLE_GROUP_TAG &&
-		group_tag != BIPED_GROUP_TAG && group_tag != SCENERY_GROUP_TAG))
+		group_tag != BIPED_GROUP_TAG && group_tag != SCENERY_GROUP_TAG &&
+		group_tag != MACHINE_GROUP_TAG && group_tag != CONTROL_GROUP_TAG && group_tag != LIGHT_FIXTURE_GROUP_TAG))
 	{
 		return FALSE;
 	}
@@ -2700,9 +2729,12 @@ static void preview_needs(
 	{
 		preview_object_needs(source, (struct object_definition const *)root, TRUE, TRUE, needs);
 	}
-	else if (group_tag == SCENERY_GROUP_TAG)
+	else if (group_tag == SCENERY_GROUP_TAG || group_tag == MACHINE_GROUP_TAG ||
+		group_tag == CONTROL_GROUP_TAG || group_tag == LIGHT_FIXTURE_GROUP_TAG)
 	{
-		preview_object_needs(source, (struct object_definition const *)root, FALSE, FALSE, needs);
+		struct object_definition const *obj = (struct object_definition const *)root;
+		preview_object_needs(source, obj, obj->object.animation_graph.index != NONE,
+			obj->object.collision_model.index != NONE, needs);
 	}
 }
 
@@ -3393,7 +3425,7 @@ long tag_injector_tags_load(
 	tag_injector_weapons_edit(profile, existing);
 	/* (the channels of every bitmap Halo PC keeps elsewhere, the bundles'
 	among the level's, as a mod's bitmaps are found: mod_bitmaps.c) */
-	if (tag_injector_level.bitmaps_added && !custom_edition_cache_tags_loaded())
+	if (tag_injector_level.bitmaps_added)
 		custom_edition_loaded_reordered_bitmaps_find();
 	error(_error_silent, "tag injector: %s: %ld tags added and %ld replaced from %ld bundles (%lu bytes of tags), %ld "
 		"roots", port_tag_profiles_name(profile), added, replaced, tag_injector_level.bundle_count, total, root_count);
@@ -3553,7 +3585,7 @@ int tag_injector_read(
 	{
 		/* (the renderer keeps each address's channel order until it is told
 		another: the level's bitmap where a bundle's was has the Xbox's) */
-		if (tag_injector_level.bitmaps_added)
+		if (tag_injector_level.bitmaps_added && !custom_edition_cache_tags_loaded())
 			halo_custom_edition_texels_channels(buffer, _custom_edition_channels_xbox);
 		return 0;
 	}

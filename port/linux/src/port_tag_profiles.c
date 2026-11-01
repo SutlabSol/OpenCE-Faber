@@ -1,15 +1,15 @@
 /*
 PORT_TAG_PROFILES.C
 
-The tag injector's profiles (port_tag_profiles.h): the folders of the data
-root's tag_injector folder, each a profile, which holds a profile.toml and
+The Faber Tag Vault's profiles (port_tag_profiles.h): the folders of the data
+root's Faber_data/tag_vault folder, each a profile, which holds a vault.toml and
 the tag bundles of its tags (port/linux/game/tag_bundle.h), one a file:
 
-	tag_injector/
+	Faber_data/tag_vault/
 	  Brutes/
-	    profile.toml
-	    carbine.weap.tagbundle
-	    brute major carbine.actv.tagbundle
+	    vault.toml
+	    carbine.weap.fbrpkg
+	    brute major carbine.actv.fbrpkg
 
 	name = "Brutes"
 	format = 1
@@ -18,7 +18,7 @@ the tag bundles of its tags (port/linux/game/tag_bundle.h), one a file:
 	map = "firefight-fissurefall"
 	group = "weap"
 	tag = "cmt\\weapons\\covenant\\carbine\\carbine"
-	file = "carbine.weap.tagbundle"
+	file = "carbine.weap.fbrpkg"
 	enabled = true
 	faction = "covenant"
 	class = "automatic"
@@ -37,9 +37,9 @@ it by, which the player gave it; its path (tag) stays its map's, which its
 bundle has and a level knows it by.
 
 A tag added is kept as port_tag_store.c keeps it: its tags in a tag file
-(carbine.weap.tagref), and its pixels, samples and vertices in the
-profile's pack (tags.pack, tags.index), each once whichever tags have them,
-compressed. A bundle as it was taken out (carbine.weap.tagbundle, as an
+(carbine.weap.fbrtag), and its pixels, samples and vertices in the
+profile's pack (faber_vault.bin, faber_vault.idx), each once whichever tags have them,
+compressed. A bundle as it was taken out (carbine.weap.fbrpkg, as an
 earlier build kept them, or ce_tags extract writes) is read as it is; the
 Tag Injector's menu stores those as it opens (tag_injector_profile_store).
 A profile with a tag file is of format 2, which an earlier build does not
@@ -52,19 +52,19 @@ profiles and takes tags out of maps into them (tag_injector.c), and the
 randomizer's Go Crazy adds the tags of the profile game.tag_injection_profile
 names to a level.
 
-A folder without profile.toml is not a profile, and a profile made for a
+A folder without vault.toml is not a profile, and a profile made for a
 later format than this build's is not listed. A tag whose bundle is missing
 is listed, and left out where it is played.
 
 A network game's shared profile (port/linux/game/tag_multiplayer.c) is a
-folder of tag_injector/.shared, named for the hash of its archive: the
+folder of Faber_data/tag_vault/.shared, named for the hash of its archive: the
 host's weapons a multiplayer game plays (or the tags a co-op game plays),
 made from one of its profiles, and a client's download of it. It is no scan's (the menus never list it): it is
 opened alone, into a slot of its own past the profiles found, and kept
 there whatever scans come. Its archive (<id>.tagshare beside it) is its
 folder's files in one, as map sharing sends one file:
 
-	"OCETAGS1", a count (little-endian, 4 bytes), and of each file its
+	"FABRPKG1", a count (little-endian, 4 bytes), and of each file its
 	name's length (4 bytes), its name and its size (4 bytes); then each
 	file's bytes, in that order
 
@@ -95,7 +95,7 @@ profile of bundles alone is written 1, which an earlier build reads) */
 #define TAG_PROFILES_BUNDLES_FORMAT 1
 
 #define MAXIMUM_TAG_PROFILES 64
-#define MAXIMUM_PROFILE_TAGS 256
+#define MAXIMUM_PROFILE_TAGS 512
 #define MAXIMUM_FOLDER_LENGTH 64
 #define MAXIMUM_NAME_LENGTH 64
 #define MAXIMUM_TAG_NAME_LENGTH 256
@@ -107,19 +107,19 @@ profile of bundles alone is written 1, which an earlier build reads) */
 longest key */
 #define MAXIMUM_TAG_EDITS 512
 #define MAXIMUM_EDIT_KEY_LENGTH 48
-/* the most a character takes in profile.toml (\u00XX) */
+/* the most a character takes in vault.toml (\u00XX) */
 #define TOML_CHARACTER_LENGTH 6
 /* the most bundles open at once (a level's), and what their reads go
 through on their way into the Xbox's memory, which the renderer watches
 (memory_watch.c: the kernel fails a read into memory it has protected) */
-#define MAXIMUM_OPEN_BUNDLES 64
+#define MAXIMUM_OPEN_BUNDLES 128
 #define READ_BOUNCE_SIZE 0x10000
-/* the shared profiles' folder (of tag_injector), the slot the one opened is
+/* the shared profiles' folder (of Faber_data/tag_vault), the slot the one opened is
 in, and an archive's magic, most files and largest file */
 #define SHARED_FOLDER ".shared"
 #define SHARED_PROFILE MAXIMUM_TAG_PROFILES
 #define SHARED_ID_LENGTH 32
-#define ARCHIVE_MAGIC "OCETAGS1"
+#define ARCHIVE_MAGIC "FABRPKG1"
 #define ARCHIVE_MAGIC_LENGTH 8
 #define MAXIMUM_ARCHIVE_FILES (MAXIMUM_PROFILE_TAGS + 8)
 #define MAXIMUM_ARCHIVE_FILE_SIZE 0x40000000UL
@@ -206,7 +206,11 @@ static int names_compare(const char *first, const char *second)
 
 static const char *profiles_root(char *path, size_t size)
 {
-	snprintf(path, size, "%s/tag_injector", platform_data_root());
+	char data_dir[MAXIMUM_PATH_LENGTH];
+
+	snprintf(data_dir, sizeof(data_dir), "%s/Faber_data", platform_data_root());
+	posix_make_directory(data_dir);
+	snprintf(path, size, "%s/Faber_data/tag_vault", platform_data_root());
 	return path;
 }
 
@@ -472,7 +476,7 @@ static void profile_dispose(struct tag_profile *profile)
 	memset(profile, 0, sizeof(*profile));
 }
 
-/* reads the profile.toml of the profile in `folder`; 0 when it is not one */
+/* reads the vault.toml of the profile in `folder`; 0 when it is not one */
 static int profile_read(struct tag_profile *profile, const char *root, const char *folder)
 {
 	char path[MAXIMUM_PATH_LENGTH];
@@ -486,7 +490,7 @@ static int profile_read(struct tag_profile *profile, const char *root, const cha
 	memset(profile, 0, sizeof(*profile));
 	text_copy(profile->folder, sizeof(profile->folder), folder);
 	text_copy(profile->name, sizeof(profile->name), folder);
-	snprintf(path, sizeof(path), "%s/%s/profile.toml", root, folder);
+	snprintf(path, sizeof(path), "%s/%s/vault.toml", root, folder);
 	text = config_file_read(path, &size);
 	if (!text)
 		return 0;
@@ -703,7 +707,7 @@ static char *profile_text(const struct tag_profile *profile)
 	return text;
 }
 
-/* writes a profile's profile.toml; 0 if it cannot be */
+/* writes a profile's vault.toml; 0 if it cannot be */
 static int profile_write(const struct tag_profile *profile)
 {
 	char path[MAXIMUM_PATH_LENGTH];
@@ -712,7 +716,7 @@ static int profile_write(const struct tag_profile *profile)
 
 	if (!text)
 		return 0;
-	profile_path(profile, "profile.toml", path, sizeof(path));
+	profile_path(profile, "vault.toml", path, sizeof(path));
 	written = file_write(path, text, (unsigned long)strlen(text));
 	if (!written)
 		platform_log("tag injector: %s cannot be written", path);
@@ -973,7 +977,7 @@ long port_tag_profiles_duplicate(long profile, const char *name)
 
 		snprintf(from, sizeof(from), "%s/%s", from_folder, file);
 		snprintf(to, sizeof(to), "%s/%s", to_folder, file);
-		if (file[0] == '.' || !strcmp(file, "profile.toml") || !strcmp(file, SHARED_MULTIPLAYER_FILE) ||
+		if (file[0] == '.' || !strcmp(file, "vault.toml") || !strcmp(file, SHARED_MULTIPLAYER_FILE) ||
 			!strcmp(file, SHARED_CAMPAIGN_FILE) ||
 			posix_stat(from, &information) != 0 ||
 			(information.flags & _posix_file_is_directory))
@@ -1304,7 +1308,7 @@ int port_tag_profiles_tag_add(long profile, const char *map, unsigned long group
 	char replaced[MAXIMUM_FILE_NAME_LENGTH];
 	char group_name[5];
 	char base[MAXIMUM_FILE_NAME_LENGTH - 24];
-	const char *extension = regions ? PORT_TAG_STORE_EXTENSION : ".tagbundle";
+	const char *extension = regions ? PORT_TAG_STORE_EXTENSION : ".fbrpkg";
 	const char *leaf;
 	unsigned long stored = size;
 	long existing;
@@ -1589,7 +1593,7 @@ int port_tag_profiles_shared_present(const char *id)
 	if (!shared_id_valid(id))
 		return 0;
 	port_tag_profiles_shared_path(id, path, sizeof(path));
-	snprintf(path + strlen(path), sizeof(path) - strlen(path), "/profile.toml");
+	snprintf(path + strlen(path), sizeof(path) - strlen(path), "/vault.toml");
 	return posix_stat(path, &information) == 0 && !(information.flags & _posix_file_is_directory);
 }
 
@@ -1811,8 +1815,8 @@ long port_tag_profiles_shared_build(long profile, unsigned long group, const cha
 	compressed again) */
 	if (shared.tag_count)
 	{
-		count += archive_entry_file(&entries[count], found, "tags.pack");
-		count += archive_entry_file(&entries[count], found, "tags.index");
+		count += archive_entry_file(&entries[count], found, "faber_vault.bin");
+		count += archive_entry_file(&entries[count], found, "faber_vault.idx");
 		/* (and the multiplayer or campaign profile played, which a client
 		takes a copy of) */
 		if (multiplayer && multiplayer[0])
@@ -1825,7 +1829,7 @@ long port_tag_profiles_shared_build(long profile, unsigned long group, const cha
 	if (written)
 	{
 		memset(&entries[count], 0, sizeof(entries[count]));
-		text_copy(entries[count].name, sizeof(entries[count].name), "profile.toml");
+		text_copy(entries[count].name, sizeof(entries[count].name), "vault.toml");
 		entries[count].bytes = text;
 		entries[count].size = (unsigned long)strlen(text);
 		count++;
@@ -1889,7 +1893,7 @@ int port_tag_profiles_shared_unpack(const char *archive, const char *id)
 		for (other = 0; unpacked && other < index; other++)
 			unpacked = strcmp(names[index], names[other]) != 0;
 	}
-	for (index = 0; unpacked && index < count && strcmp(names[index], "profile.toml"); index++)
+	for (index = 0; unpacked && index < count && strcmp(names[index], "vault.toml"); index++)
 	{
 	}
 	unpacked = unpacked && index < count;

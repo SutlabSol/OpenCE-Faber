@@ -1729,7 +1729,7 @@ static void network_game_server_port_bots(
 	{
 		struct network_player *player = &server->game.players[slot];
 
-		if (!network_player_is_valid(player) || bots_machine_is_bot(player->machine_index))
+		if (!network_player_is_valid(player))
 			continue;
 		if (bots_machine_is_bot(player->machine_index))
 		{
@@ -5663,7 +5663,9 @@ static boolean network_game_server_idle_pregame_tasks(
 		/* port: the gametype's auto team balance (game_variant_options):
 		the lobby's teams kept within a player of each other, the bigger
 		team's last player moved */
-		if (server->game.variant.universal_variant.teams && server->game.variant_options.auto_team_balance)
+		if (server->game.variant.universal_variant.teams &&
+			!network_game_server_is_pve(server) &&
+			server->game.variant_options.auto_team_balance)
 		{
 			for (;;)
 			{
@@ -5952,7 +5954,8 @@ boolean network_game_server_reset_to_pregame(
 			else
 				network_event("server resetting to pregame (some machines missed it)");
 
-			if (server->game.variant.universal_variant.teams)
+			if (server->game.variant.universal_variant.teams &&
+				!network_game_server_is_pve(server))
 			{
 				for (i = 0; i < MAXIMUM_NETWORK_PLAYER_COUNT; i++)
 				{
@@ -6026,7 +6029,8 @@ boolean network_game_server_reset_to_pregame(
 	{
 		success = network_game_server_setup_game_from_playlist(server);
 
-		if (server->game.variant.universal_variant.teams)
+		if (server->game.variant.universal_variant.teams &&
+			!network_game_server_is_pve(server))
 		{
 			for (i = 0; i < MAXIMUM_NETWORK_PLAYER_COUNT; i++)
 			{

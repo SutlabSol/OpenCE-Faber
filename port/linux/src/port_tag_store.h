@@ -11,8 +11,8 @@ back as it was written, byte for byte (port_tag_profiles.c's bundles).
 #ifndef PORT_TAG_STORE_H
 #define PORT_TAG_STORE_H
 
-/* a tag file's extension (a bundle as it was taken out is .tagbundle) */
-#define PORT_TAG_STORE_EXTENSION ".tagref"
+/* a tag file's extension (a bundle as it was taken out is .fbrpkg) */
+#define PORT_TAG_STORE_EXTENSION ".fbrtag"
 
 /* a region of a bundle's file data (tag_bundle.h's tag_bundle_file_region:
 the same layout): its offset in the file data, and its size */

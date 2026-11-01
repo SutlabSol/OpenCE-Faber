@@ -1299,6 +1299,11 @@ long scenario_tags_load(
 			global_tag_instances = cache_file_globals.tag_header->tag_instances;
 			global_tag_count = cache_file_globals.tag_header->tag_count;
 			cache_file_globals.tags_loaded = TRUE;
+			{
+				extern void randomizer_tags_loaded(char const *scenario_name);
+
+				randomizer_tags_loaded(scenario_name);
+			}
 			/* (the menus' tags, as for this build's maps below) */
 			{
 				extern void menu_tags_loaded(char const *map_name);

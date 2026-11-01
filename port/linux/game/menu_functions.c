@@ -3627,14 +3627,13 @@ static short tags_custom_maps_of_kind_count(boolean campaign)
 
 static short tags_profile_category_count(long profile, short category)
 {
-	unsigned long group = tag_injector_category_group(category);
 	long count = port_tag_profiles_tag_count(profile);
 	long tag;
 	short n = 0;
 
 	for (tag = 0; tag < count; tag++)
 	{
-		if (port_tag_profiles_tag_group(profile, tag) == group)
+		if (tag_injector_group_in_category(port_tag_profiles_tag_group(profile, tag), category))
 			n++;
 	}
 	return n;
@@ -3642,13 +3641,12 @@ static short tags_profile_category_count(long profile, short category)
 
 static long tags_profile_category_tag(long profile, short category, short which)
 {
-	unsigned long group = tag_injector_category_group(category);
 	long count = port_tag_profiles_tag_count(profile);
 	long tag;
 
 	for (tag = 0; tag < count; tag++)
 	{
-		if (port_tag_profiles_tag_group(profile, tag) == group && which-- == 0)
+		if (tag_injector_group_in_category(port_tag_profiles_tag_group(profile, tag), category) && which-- == 0)
 			return tag;
 	}
 	return NONE;
@@ -3792,6 +3790,11 @@ static boolean creation_hub_build_and_open_map(struct widget_instance *widget)
 		snprintf(level_name, sizeof(level_name), "custom_maps\\%s", tags_screen.new_map_name);
 	}
 
+	{
+		extern int g_forge_session_enabled;
+
+		g_forge_session_enabled = 1;
+	}
 	creation_hub_set_live_injection(tags_screen.inject_into_created_map);
 	campaign_start(level_name, 1, controller_of(widget));
 	return TRUE;
@@ -6616,36 +6619,6 @@ static void server_settings_update(struct widget_instance *list)
 			visible_set(named(list, "op_player_options", 0), FALSE);
 			visible_set(named(list, "op_item_options", 0), FALSE);
 			visible_set(named(list, "op_vehicle_options", 0), FALSE);
-			if (named(list, "op_indicator_options", 0))
-				named(list, "op_indicator_options", 0)->vertical_offset = 220;
-			if (named(list, "op_team_options", 0))
-				named(list, "op_team_options", 0)->vertical_offset = 242;
-			if (named(list, "op_ff_player_scale", 0))
-				named(list, "op_ff_player_scale", 0)->vertical_offset = 264;
-			if (named(list, "op_bots_options", 0))
-				named(list, "op_bots_options", 0)->vertical_offset = 286;
-			if (named(list, "op_scoring", 0))
-				named(list, "op_scoring", 0)->vertical_offset = 308;
-		}
-		else if (cooperative)
-		{
-			if (named(list, "op_coop_options", 0))
-				named(list, "op_coop_options", 0)->vertical_offset = 198;
-			if (named(list, "op_voice_options", 0))
-				named(list, "op_voice_options", 0)->vertical_offset = 220;
-			if (named(list, "op_bots_options", 0))
-				named(list, "op_bots_options", 0)->vertical_offset = 242;
-			if (named(list, "op_scoring", 0))
-				named(list, "op_scoring", 0)->vertical_offset = 264;
-		}
-		else if (!is_ranked)
-		{
-			if (named(list, "op_indicator_options", 0))
-				named(list, "op_indicator_options", 0)->vertical_offset = 286;
-			if (named(list, "op_team_options", 0))
-				named(list, "op_team_options", 0)->vertical_offset = 308;
-			if (named(list, "op_bots_options", 0))
-				named(list, "op_bots_options", 0)->vertical_offset = 330;
 		}
 		/* co-op's options in their place, rows opening their screens
 		(tools/port_settings.py's COOP_SETUP_SCREENS), each its help */
@@ -6737,6 +6710,54 @@ static void server_settings_update(struct widget_instance *list)
 		text_field_show(named(list, "password_value", 0), index ? text : "NONE", text_field_editing(row));
 		if (help && list->focused_child == row)
 			help->parameters.text_box.string_list_index = SERVER_PASSWORD_HELP;
+	}
+	/* Space visible option rows evenly at standard non-overlapping height */
+	{
+		static char const * const all_rows[] = {
+			"op_server_name",
+			"op_max_players",
+			"op_invite",
+			"op_listing",
+			"op_password",
+			"op_map_share_options",
+			"op_coop_options",
+			"op_voice_options",
+			"op_game_type",
+			"op_player_options",
+			"op_item_options",
+			"op_vehicle_options",
+			"op_indicator_options",
+			"op_team_options",
+			"op_ff_player_scale",
+			"op_bots_options",
+			"op_scoring",
+		};
+		short index, visible_count = 0;
+		short top, step;
+
+		for (index = 0; index < NUMBEROF(all_rows); index++)
+		{
+			struct widget_instance *item = named(list, all_rows[index], 0);
+			if (item && item->visible)
+				visible_count++;
+		}
+		top = visible_count >= 13 ? 72 : 73;
+		step = visible_count <= 10 ? 30 : visible_count == 11 ? 28 : visible_count == 12 ? 26 : 25;
+		for (index = 0; index < NUMBEROF(all_rows); index++)
+		{
+			struct widget_instance *item = named(list, all_rows[index], 0);
+			if (item && item->visible)
+			{
+				item->vertical_offset = top;
+				top += step;
+			}
+		}
+		if (list->parameters.list.extended_description)
+		{
+			short min_help_top = (short)(top - step + 26);
+			list->parameters.list.extended_description->vertical_offset =
+				min_help_top > 374 ? min_help_top : 374;
+		}
 	}
 }
 
@@ -7057,7 +7078,9 @@ static short campaign_level_of(char const *map_name)
 	short level;
 
 	/* (a Custom Edition map, custom_maps\a30, is never one) */
-	if (custom_edition_level_name(map_name))
+	if (map_name &&
+		(_strnicmp(map_name, CUSTOM_EDITION_LEVEL_NAME_PREFIX, csstrlen(CUSTOM_EDITION_LEVEL_NAME_PREFIX)) == 0 ||
+		 custom_edition_level_name(map_name)))
 		return NONE;
 	for (level = 0; level < NUMBER_OF_SINGLE_PLAYER_LEVELS; level++)
 	{
@@ -7099,7 +7122,7 @@ static void map_display_name(char const *map_name, wchar_t *text)
 	short count = xbox_multiplayer_map_count(ui_widget_port_multiplayer_maps(&names, NULL));
 
 	/* (a Custom Edition map's, if this machine has it: custom_edition_maps.c) */
-	if (custom_edition_level_name(map_name))
+	if (custom_edition_level_name(map_name) || custom_edition_maps_display_index(map_name) != NONE)
 	{
 		short display_index = custom_edition_maps_display_index(map_name);
 		wchar_t const *name = display_index != NONE ? custom_edition_maps_name(display_index) : NULL;
@@ -8168,7 +8191,9 @@ static void lobby_map_show(struct widget_instance *description, char const *map_
 	}
 	/* (a Custom Edition map's picture and name, multiplayer or campaign, by
 	its display index, if this machine has it: custom_edition_maps.c) */
-	if (custom_edition_level_name(map_name) && custom_edition_maps_display_index(map_name) != NONE)
+	if (custom_edition_maps_display_index(map_name) != NONE &&
+		(custom_edition_level_name(map_name) ||
+		 (map_name && _strnicmp(map_name, CUSTOM_EDITION_LEVEL_NAME_PREFIX, csstrlen(CUSTOM_EDITION_LEVEL_NAME_PREFIX)) == 0)))
 		map = custom_edition_maps_display_index(map_name);
 	/* (a network co-op game's level: its picture and name, sp_levels' and
 	map_list's, in the place of the map's) */
@@ -9472,7 +9497,9 @@ static boolean gamemode_menu_init(struct widget_instance *list)
 	}
 	if (list->name && !strcmp(list->name, "forge_tag_options_select_list"))
 	{
-		if (named(list, "forge_item_inject_tags", 0))
+		if (named(list, "forge_item_add_tags", 0))
+			list->focused_child = named(list, "forge_item_add_tags", 0);
+		else if (named(list, "forge_item_inject_tags", 0))
 			list->focused_child = named(list, "forge_item_inject_tags", 0);
 		return TRUE;
 	}
@@ -9575,17 +9602,18 @@ static void gamemode_menu_update(struct widget_instance *list)
 				pic->animation.current_frame_index = _gamemode_creation_hub;
 			if (txt)
 			{
-				text_set(
+				text_set_length(
 					txt,
 					!strcmp(fc, "chub_item_create_map") ?
-						L"CREATE / EDIT MAP\r\nCHOOSE MAP NAME & BASE MAP,\r\nINJECT TAGS OR TEST RANGE" :
+						L"CREATE / EDIT MAP\r\nCHOOSE MAP NAME &\r\nBASE MAP, INJECT TAGS" :
 					!strcmp(fc, "chub_item_tag_editor") ?
-						L"TAG CACHE & EDITOR\r\nEXTRACT CUSTOM EDITION TAGS,\r\n3D PREVIEW & EDIT TAG STATS" :
+						L"TAG CACHE & EDITOR\r\nEXTRACT CUSTOM TAGS,\r\n3D PREVIEW & EDIT" :
 					!strcmp(fc, "chub_item_firing_range") ?
-						L"FORERUNNER TEST RANGE\r\nGUN RANGE, VEHICLE TRACK,\r\nANIMATION STAGE & AI ARENA" :
+						L"FORERUNNER TEST RANGE\r\nGUN RANGE, VEHICLES,\r\nANIMATIONS & AI ARENA" :
 					!strcmp(fc, "chub_item_mods_manager") ?
-						L"MODS MANAGER\r\nENABLE, DISABLE & REORDER\r\nINSTALLED MOD PACKAGES" :
-						L"CREATION HUB\r\nMODDING, TAG INJECTION,\r\nMAP CREATION & TEST RANGE");
+						L"MODS MANAGER\r\nENABLE, DISABLE &\r\nREORDER MOD PACKAGES" :
+						L"CREATION HUB\r\nMODDING, TAG INJECTION,\r\nMAP CREATION & RANGE",
+					160);
 			}
 			profile_name_show(desc);
 		}
@@ -9606,23 +9634,32 @@ static void gamemode_menu_update(struct widget_instance *list)
 				pic->animation.current_frame_index = _gamemode_forge;
 			if (txt)
 			{
-				text_set(
+				text_set_length(
 					txt,
 					!strcmp(fc, "forge_item_multiplayer") ?
-						L"MULTIPLAYER FORGE\r\nHOST OR JOIN LIVE CO-OP\r\nMAP EDITING SESSIONS" :
+						L"MULTIPLAYER FORGE\r\nHOST OR JOIN LIVE\r\nCO-OP MAP EDITING\r\nSESSIONS" :
 					!strcmp(fc, "forge_item_edit_maps") ?
 						L"SAVED FORGE MAPS\r\nBROWSE & LOAD SAVED\r\nFORGE & CUSTOM MAPS" :
 					!strcmp(fc, "forge_item_tag_options") ?
-						L"TAG OPTIONS\r\nMANAGE CUSTOM TAGS,\r\nTAG CACHE & SNAP POINTS" :
+						L"TAG OPTIONS\r\nADD TAGS FROM MAPS,\r\nMANAGE & RESET\r\nTAG CACHES" :
+					!strcmp(fc, "forge_item_add_tags") ?
+						L"ADD TAGS\r\nBROWSE CUSTOM MAPS\r\nWITH 3D PREVIEW &\r\nEXTRACT TAGS" :
+					!strcmp(fc, "forge_item_installed_tags") ?
+						L"INSTALLED TAGS\r\nVIEW 3D PREVIEWS &\r\nMANAGE INSTALLED\r\nCACHE TAGS" :
+					!strcmp(fc, "forge_item_reset_stock_tags") ?
+						L"RESET STOCK TAGS\r\nCLEAR STOCK TAG CACHE\r\nWHILE KEEPING\r\nCUSTOM TAGS" :
+					!strcmp(fc, "forge_item_reset_custom_tags") ?
+						L"RESET CUSTOM TAGS\r\nREMOVE ALL EXTRACTED\r\nCUSTOM [C] TAG\r\nPACKAGES" :
 					!strcmp(fc, "forge_item_inject_tags") ?
-						L"SYNC CUSTOM TAGS\r\nIMPORT .OCETAGS PACKAGES\r\nFROM FABER_DATA" :
+						L"SYNC CUSTOM TAGS\r\nIMPORT .OCETAGS\r\nPACKAGES FROM\r\nFABER_DATA" :
 					!strcmp(fc, "clear_custom_cache_profile_item") ?
-						L"CLEAR CUSTOM TAGS\r\nREMOVE IMPORTED CUSTOM\r\n.OCETAGS PACKAGES" :
+						L"CLEAR CUSTOM TAGS\r\nREMOVE IMPORTED\r\nCUSTOM .OCETAGS\r\nPACKAGES" :
 					!strcmp(fc, "reset_tag_cache_profile_item") ?
 						L"RESET TAG CACHE\r\nREBUILD ALL EXTRACTED\r\nFORGE TAG CACHES" :
 					!strcmp(fc, "forge_item_snap_points") ?
-						L"SNAP POINTS\r\nASSIGN 3D SNAP FACES &\r\nALIGNMENT EDGES TO TAGS" :
-						L"SINGLE PLAYER SANDBOX\r\nEDIT ANY STOCK, CUSTOM OR\r\nFORGE MAP SOLO");
+						L"SNAP POINTS\r\nASSIGN 3D SNAP FACES\r\n& ALIGNMENT EDGES\r\nTO TAGS" :
+						L"SINGLE PLAYER SANDBOX\r\nEDIT ANY STOCK,\r\nCUSTOM OR FORGE\r\nMAP SOLO",
+					160);
 			}
 			profile_name_show(desc);
 		}
@@ -9664,21 +9701,22 @@ static void gamemode_menu_update(struct widget_instance *list)
 			pic->animation.current_frame_index = focused_mode;
 		if (txt)
 		{
-			text_set(
+			text_set_length(
 				txt,
 				focused_mode == _gamemode_firefight ?
-					L"CO-OP WAVE SURVIVAL\r\nHOLD OUT AGAINST COVENANT DROPSHIPS" :
+					L"CO-OP WAVE SURVIVAL\r\nHOLD OUT AGAINST\r\nCOVENANT DROPSHIPS" :
 				focused_mode == _gamemode_ranked ?
-					L"COMPETITIVE RANKED PLAY\r\nCOMING SOON" :
+					L"COMPETITIVE RANKED\r\nPLAY COMING SOON" :
 				focused_mode == _gamemode_forge ?
-					L"MAP & SANDBOX EDITOR\r\nBUILD, SPAWN TAGS & EDIT\r\nMAPS SOLO OR TOGETHER" :
+					L"MAP & SANDBOX EDITOR\r\nBUILD, SPAWN TAGS &\r\nEDIT MAPS SOLO OR\r\nTOGETHER" :
 				focused_mode == _gamemode_theater ?
-					L"THEATER REPLAY STUDIO\r\nWATCH SAVED FILMS WITH\r\nFREE-CAM & SPEED CONTROLS" :
+					L"THEATER REPLAY STUDIO\r\nWATCH SAVED FILMS\r\nWITH FREE-CAM &\r\nSPEED CONTROLS" :
 				focused_mode == _gamemode_creation_hub ?
-					L"CREATION HUB\r\nTAG CACHE, TAG EDITOR, MAP\r\nCREATOR & FIRING RANGE" :
+					L"CREATION HUB\r\nTAG CACHE, TAG EDITOR,\r\nMAP CREATOR & RANGE" :
 				focused_mode == _gamemode_dedi_server ?
-					L"DEDICATED SERVER\r\nCONFIGURE & LAUNCH AUTONOMOUS\r\nSERVER ROTATION & WEB PANEL" :
-					L"STANDARD MULTIPLAYER\r\nSLAYER, CTF, KING, ODDBALL & RACE");
+					L"DEDICATED SERVER\r\nCONFIGURE & LAUNCH\r\nSERVER ROTATION &\r\nWEB PANEL" :
+					L"STANDARD MULTIPLAYER\r\nSLAYER, CTF, KING,\r\nODDBALL & RACE",
+				160);
 		}
 		profile_name_show(desc);
 	}
@@ -9689,6 +9727,7 @@ static void mp_type_screen_update(struct widget_instance *list)
 	struct widget_instance *screen = list ? screen_of(list) : NULL;
 	struct widget_instance *coop_item = list ? named(list, "multiplayer_type_coop_item", 0) : NULL;
 	struct widget_instance *gametypes_item = list ? named(list, "multiplayer_type_gametypes_item", 0) : NULL;
+	struct widget_instance *desc = list ? list->parameters.list.extended_description : NULL;
 	boolean is_standard = multiplayer.gamemode == _gamemode_standard;
 	boolean can_edit_gametypes = multiplayer.gamemode == _gamemode_standard ||
 		multiplayer.gamemode == _gamemode_firefight;
@@ -9715,6 +9754,13 @@ static void mp_type_screen_update(struct widget_instance *list)
 	{
 		if (named(list, "multiplayer_type_join_internet_item", 0))
 			list->focused_child = named(list, "multiplayer_type_join_internet_item", 0);
+	}
+	if (desc && list && list->focused_child && list->focused_child->name &&
+		!strcmp(list->focused_child->name, "forge_type_edit_maps_item"))
+	{
+		struct widget_instance *txt = desc->child;
+		if (txt)
+			txt->parameters.text_box.string_list_index = 7;
 	}
 }
 
@@ -11547,6 +11593,55 @@ static void menu_draw_unicode_text(
 	rasterizer_draw_unicode_string(&bounds, &bounds, NULL, 0, text);
 }
 
+static void menu_draw_unicode_text_scaled_vcentered(
+	short x0,
+	short x1,
+	real mid_y,
+	long font_tag,
+	real base_scale,
+	real_argb_color const *color,
+	wchar_t const *text)
+{
+	rectangle2d measure_bounds, text_bounds, cursor_bounds, draw_bounds;
+	short cap_mid;
+	real scale = base_scale;
+	real avail_w = (real)(x1 - x0);
+	real raw_w;
+	short draw_y;
+
+	if (font_tag == NONE || !text || !text[0] || x1 <= x0)
+		return;
+
+	measure_bounds.x0 = 0;
+	measure_bounds.y0 = 0;
+	measure_bounds.x1 = 2000;
+	measure_bounds.y1 = 200;
+	draw_string_set_draw_mode(font_tag, NONE, 0, 0, color);
+	draw_unicode_string_compute_bounds(&measure_bounds, text, &text_bounds, &cursor_bounds);
+	raw_w = (real)(text_bounds.x1 - text_bounds.x0);
+	if (raw_w * scale > avail_w && raw_w > 1.0f)
+	{
+		scale = avail_w / raw_w;
+		if (scale < 0.50f)
+			scale = 0.50f;
+	}
+
+	cap_mid = draw_unicode_string_capital_middle(&measure_bounds, text);
+	if (cap_mid <= 0)
+		cap_mid = 9;
+	draw_y = (short)(mid_y - (real)cap_mid * scale + 0.5f);
+
+	draw_bounds.x0 = x0;
+	draw_bounds.y0 = draw_y;
+	draw_bounds.x1 = (short)(x0 + (short)(avail_w / scale) + 32);
+	draw_bounds.y1 = (short)(draw_y + 64);
+
+	rasterizer_text_set_scale(scale, (real)x0, (real)draw_y);
+	draw_string_set_draw_mode(font_tag, NONE, 0, 0, color);
+	rasterizer_draw_unicode_string(&draw_bounds, &draw_bounds, NULL, 0, text);
+	rasterizer_text_set_scale(1.0f, 0.0f, 0.0f);
+}
+
 void menu_functions_post_render(void *active_widget, boolean at_main_menu)
 {
 	struct widget_instance *screen = (struct widget_instance *)active_widget;
@@ -11610,10 +11705,10 @@ void menu_functions_post_render(void *active_widget, boolean at_main_menu)
 			((unsigned long)(PIN((long)(armor_rgb.green * 255.0f + 0.5f), 0L, 255L)) << 8) |
 			(unsigned long)(PIN((long)(armor_rgb.blue * 255.0f + 0.5f), 0L, 255L));
 		real_argb_color name_col = { 1.0f, 0.95f, 0.98f, 1.0f };
-		real_argb_color sub_col = { 1.0f, 0.45f, 0.76f, 1.0f };
-		wchar_t sub_line[48];
-		wchar_t r_name_wide[32];
-		short card_x0 = 368, card_y0 = 8, card_x1 = 628, card_y1 = 44;
+		short screen_right = (short)(640 + (halo_screen_width() - 640) / 2);
+		short card_x1 = (short)(screen_right - 6);
+		short card_x0 = (short)(card_x1 - 236);
+		short card_y0 = 6, card_y1 = 40;
 
 		if (cached_stats_index != cached_index || now_ms - cached_stats_time > 1500)
 		{
@@ -11636,56 +11731,29 @@ void menu_functions_post_render(void *active_widget, boolean at_main_menu)
 		}
 
 		{
-			boolean is_ranked_context = (multiplayer.gamemode == _gamemode_ranked) ||
-				(named(screen, "service_record", 0) && sr_selected_tab == 4);
 			short text_x0 = (short)(card_x0 + 100);
+			short text_x1 = (short)(card_x1 - 8);
+			real card_mid_y = 0.5f * (real)(card_y0 + card_y1);
 
 			/* MCC Nameplate Card frame & armor color stripe */
 			firefight_draw_mcc_nameplate(card_x0, card_y0, card_x1, card_y1, emblem.nameplate, accent_col, 1.0f);
 
 			/* Custom Emblem (left) + MCC Shield & Level Icon (middle) + Halo 3 Ranked Emblem (right of shield) */
-			firefight_draw_player_emblem((short)(card_x0 + 8), (short)(card_y0 + 5), 26, &emblem, 1.0f);
-			firefight_draw_mcc_rank_icon((short)(card_x0 + 38), (short)(card_y0 + 5), 26,
+			firefight_draw_player_emblem((short)(card_x0 + 8), (short)(card_y0 + 4), 26, &emblem, 1.0f);
+			firefight_draw_mcc_rank_icon((short)(card_x0 + 38), (short)(card_y0 + 4), 26,
 				rank_info.tour_number, rank_info.rank_in_tour, 1.0f);
-			firefight_draw_h3_ranked_icon((short)(card_x0 + 68), (short)(card_y0 + 5), 26,
+			firefight_draw_h3_ranked_icon((short)(card_x0 + 68), (short)(card_y0 + 4), 26,
 				cached_h3_ranked.rank_index, 1.0f);
 
-			/* Player Name + Rank Title */
-			menu_draw_unicode_text(
+			/* Player Name slightly smaller (0.80x) and vertically centered on the nameplate backdrop */
+			menu_draw_unicode_text_scaled_vcentered(
 				text_x0,
-				(short)(card_y0 + 4),
-				(short)(card_x1 - 4),
-				(short)(card_y0 + 22),
+				text_x1,
+				card_mid_y,
 				large_font,
-				0,
+				0.80f,
 				&name_col,
 				cached_profile.player_name);
-			text_widen(r_name_wide, NUMBEROF(r_name_wide),
-				is_ranked_context
-					? (cached_h3_ranked.rank_name ? cached_h3_ranked.rank_name : "Recruit")
-					: (rank_info.rank_name ? rank_info.rank_name : "Recruit"));
-			if (is_ranked_context)
-			{
-				usnprintf(sub_line, NUMBEROF(sub_line) - 1, L"T%d | %s (%ldp)",
-					(int)(rank_info.tour_number > 0 ? rank_info.tour_number : 1),
-					r_name_wide,
-					cached_h3_ranked.points);
-			}
-			else
-			{
-				usnprintf(sub_line, NUMBEROF(sub_line) - 1, L"T%d %s",
-					(int)(rank_info.tour_number > 0 ? rank_info.tour_number : 1), r_name_wide);
-			}
-			sub_line[NUMBEROF(sub_line) - 1] = 0;
-			menu_draw_unicode_text(
-				text_x0,
-				(short)(card_y0 + 21),
-				(short)(card_x1 - 4),
-				(short)(card_y1 - 2),
-				small_font,
-				0,
-				&sub_col,
-				sub_line);
 		}
 	}
 

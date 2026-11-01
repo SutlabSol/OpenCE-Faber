@@ -66,8 +66,37 @@ enum
 	DROPSHIP_PHASE_NONE = 0,
 	DROPSHIP_PHASE_DESCENDING = 1,
 	DROPSHIP_PHASE_HOVER_DEPLOY = 2,
-	DROPSHIP_PHASE_ASCENDING = 3
+	DROPSHIP_PHASE_ASCENDING = 3,
+
+	/* Custom Forge Firefight Spawn Marker ('ffsp' -> scenario_netgame_flag.type == 15) */
+	FF_NETGAME_FLAG_FIREFIGHT_SPAWN = 15,
+	FF_SPAWN_TYPE_AI_INFANTRY       = 0,
+	FF_SPAWN_TYPE_AI_AND_VEHICLES   = 1,
+	FF_SPAWN_TYPE_ENEMY_VEHICLE     = 2,
+	FF_SPAWN_TYPE_ENEMY_GHOST       = 3,
+	FF_SPAWN_TYPE_ENEMY_HEAVY_VEH   = 4,
+	FF_SPAWN_TYPE_DROPSHIP_ZONE     = 5,
+	FF_SPAWN_TYPE_PLAYER_VEHICLE    = 6,
+
+	FF_ROUND_ALL       = 0,
+	FF_ROUND_1         = 1,
+	FF_ROUND_2         = 2,
+	FF_ROUND_3         = 3,
+	FF_ROUND_4         = 4,
+	FF_ROUND_5         = 5,
+	FF_ROUND_1_TO_3    = 6,
+	FF_ROUND_4_TO_5    = 7,
+	FF_ROUND_BONUS     = 8,
+
+	FF_WAVE_ALL        = 0,
+	FF_WAVE_1          = 1,
+	FF_WAVE_2          = 2,
+	FF_WAVE_3_BOSS     = 3
 };
+
+#define FF_UNPACK_SPAWN_TYPE(u)   ((int)((u) & 0x0F))
+#define FF_UNPACK_ROUND_FILTER(u) ((int)(((u) >> 4) & 0x0F))
+#define FF_UNPACK_WAVE_FILTER(u)  ((int)(((u) >> 8) & 0x07))
 
 /* ---------- structures */
 
@@ -394,6 +423,213 @@ static void add_spawn_point(real_point3d const *pos, real facing)
 	g_spawn_point_count++;
 }
 
+static boolean is_stock_map_stem(char const *stem)
+{
+	static char const *const k_stock_maps[] = {
+		/* Stock Multiplayer (19) */
+		"beavercreek", "bloodgulch", "boardingaction", "carousel", "chillout",
+		"damnation", "dangercanyon", "deathisland", "gephyrophobia", "hangemhigh",
+		"icefields", "infinity", "longest", "prisoner", "putput",
+		"ratrace", "sidewinder", "timberland", "wizard",
+		/* Stock Campaign (10) */
+		"a10", "a30", "a50", "b30", "b40",
+		"c10", "c20", "c40", "d20", "d40"
+	};
+	char lowered[128];
+	size_t i;
+
+	if (!stem || !stem[0])
+		return FALSE;
+
+	lowercase_copy(stem, lowered, sizeof(lowered));
+	for (i = 0; i < NUMBEROF(k_stock_maps); i++)
+	{
+		if (strcmp(lowered, k_stock_maps[i]) == 0)
+			return TRUE;
+	}
+	return FALSE;
+}
+
+static boolean is_default_stock_map(void)
+{
+	char const *loaded_name = cache_file_loaded_map_name();
+	char const *scen_path = (global_scenario_index != NONE) ? tag_get_name(global_scenario_index) : NULL;
+	char loaded_stem[128];
+
+	if (loaded_name && loaded_name[0])
+	{
+		char const *slash = strrchr(loaded_name, '\\');
+		char *at_sep;
+		if (!slash)
+			slash = strrchr(loaded_name, '/');
+		lowercase_copy(slash ? (slash + 1) : loaded_name, loaded_stem, sizeof(loaded_stem));
+		at_sep = strchr(loaded_stem, '@');
+		if (at_sep)
+			*at_sep = '\0';
+
+		if (is_stock_map_stem(loaded_stem))
+			return TRUE;
+
+		/* If this is a Forge-saved variant (e.g. bloodgulch_forge), check whether its base scenario is a stock map */
+		if (strstr(loaded_stem, "_forge") != NULL ||
+			(scen_path && (strncmp(scen_path, "levels\\forge\\", 13) == 0 || strncmp(scen_path, "levels/forge/", 13) == 0)))
+		{
+			if (scen_path && scen_path[0])
+			{
+				char const *leaf = scen_path;
+				char const *p;
+				for (p = scen_path; *p; p++)
+				{
+					if (*p == '\\' || *p == '/')
+						leaf = p + 1;
+				}
+				return is_stock_map_stem(leaf);
+			}
+		}
+
+		/* Any other custom_maps/<name>.map is a 3rd-party custom map, even if its author kept a stock scenario tag path */
+		return FALSE;
+	}
+
+	if (scen_path && scen_path[0])
+	{
+		char const *leaf = scen_path;
+		char const *p;
+		for (p = scen_path; *p; p++)
+		{
+			if (*p == '\\' || *p == '/')
+				leaf = p + 1;
+		}
+		return is_stock_map_stem(leaf);
+	}
+
+	return TRUE;
+}
+
+static boolean ff_marker_matches_round(int round_filter, short round_num, boolean is_bonus)
+{
+	if (is_bonus)
+		return (round_filter == FF_ROUND_ALL || round_filter == FF_ROUND_BONUS);
+
+	switch (round_filter)
+	{
+	case FF_ROUND_ALL:    return TRUE;
+	case FF_ROUND_1:      return (round_num == 1);
+	case FF_ROUND_2:      return (round_num == 2);
+	case FF_ROUND_3:      return (round_num == 3);
+	case FF_ROUND_4:      return (round_num == 4);
+	case FF_ROUND_5:      return (round_num == 5);
+	case FF_ROUND_1_TO_3: return (round_num >= 1 && round_num <= 3);
+	case FF_ROUND_4_TO_5: return (round_num >= 4 && round_num <= 5);
+	case FF_ROUND_BONUS:  return FALSE;
+	default:              return TRUE;
+	}
+}
+
+static boolean ff_marker_matches_wave(int wave_filter, short wave_num, boolean is_bonus, boolean is_boss_wave)
+{
+	if (is_bonus)
+		return TRUE;
+
+	switch (wave_filter)
+	{
+	case FF_WAVE_ALL:    return TRUE;
+	case FF_WAVE_1:      return (wave_num == 1);
+	case FF_WAVE_2:      return (wave_num == 2);
+	case FF_WAVE_3_BOSS: return (wave_num == 3 || is_boss_wave);
+	default:             return TRUE;
+	}
+}
+
+static short count_custom_ff_spawn_markers(unsigned long allowed_type_mask)
+{
+	struct scenario *scen = global_scenario_try_and_get();
+	short count = 0;
+	short i;
+
+	if (!scen)
+		return 0;
+
+	for (i = 0; i < scen->netgame_flags.count; i++)
+	{
+		struct scenario_netgame_flag *flag = TAG_BLOCK_GET_ELEMENT(
+			&scen->netgame_flags, i, struct scenario_netgame_flag);
+		int stype;
+		if (!flag || flag->type != FF_NETGAME_FLAG_FIREFIGHT_SPAWN)
+			continue;
+		stype = FF_UNPACK_SPAWN_TYPE(flag->team_index);
+		if (allowed_type_mask == 0xFFFFFFFFUL || (allowed_type_mask & (1UL << stype)) != 0)
+			count++;
+	}
+	return count;
+}
+
+static boolean map_has_any_custom_ff_spawns(void)
+{
+	return count_custom_ff_spawn_markers(0xFFFFFFFFUL) > 0;
+}
+
+static short collect_matching_custom_ff_spawns(
+	unsigned long allowed_type_mask,
+	short round_num,
+	short wave_num,
+	boolean is_bonus,
+	boolean is_boss_wave,
+	boolean allow_round_wave_fallback,
+	real_point3d *out_pts,
+	real *out_facings,
+	int *out_types,
+	short max_out)
+{
+	struct scenario *scen = global_scenario_try_and_get();
+	short count = 0;
+	short pass;
+	short i;
+
+	if (!scen || max_out <= 0)
+		return 0;
+
+	/* Pass 0: Exact (round + wave) match
+	 * Pass 1 (if allow_round_wave_fallback): Exact round match, any wave
+	 * Pass 2 (if allow_round_wave_fallback): Any round, any wave */
+	for (pass = 0; pass < (allow_round_wave_fallback ? 3 : 1) && count == 0; pass++)
+	{
+		for (i = 0; i < scen->netgame_flags.count && count < max_out; i++)
+		{
+			struct scenario_netgame_flag *flag = TAG_BLOCK_GET_ELEMENT(
+				&scen->netgame_flags, i, struct scenario_netgame_flag);
+			int stype, rfilt, wfilt;
+
+			if (!flag || flag->type != FF_NETGAME_FLAG_FIREFIGHT_SPAWN)
+				continue;
+
+			stype = FF_UNPACK_SPAWN_TYPE(flag->team_index);
+			rfilt = FF_UNPACK_ROUND_FILTER(flag->team_index);
+			wfilt = FF_UNPACK_WAVE_FILTER(flag->team_index);
+
+			if ((allowed_type_mask & (1UL << stype)) == 0)
+				continue;
+			if (pass == 0 && (!ff_marker_matches_round(rfilt, round_num, is_bonus) ||
+				!ff_marker_matches_wave(wfilt, wave_num, is_bonus, is_boss_wave)))
+			{
+				continue;
+			}
+			if (pass == 1 && !ff_marker_matches_round(rfilt, round_num, is_bonus))
+				continue;
+
+			if (out_pts)
+				out_pts[count] = flag->position;
+			if (out_facings)
+				out_facings[count] = flag->facing;
+			if (out_types)
+				out_types[count] = stype;
+			count++;
+		}
+	}
+
+	return count;
+}
+
 static void discover_map_spawn_points(void)
 {
 	struct scenario *scen = global_scenario_get();
@@ -438,12 +674,12 @@ static void discover_map_spawn_points(void)
 			add_spawn_point(&loc->position, loc->facing);
 	}
 
-	/* 3. Scenario netgame flags & equipment points */
+	/* 3. Scenario netgame flags & equipment points (excluding custom Firefight Spawn markers) */
 	for (i = 0; i < scen->netgame_flags.count && g_spawn_point_count < MAX_SPAWN_POINTS; i++)
 	{
 		struct scenario_netgame_flag *flag = TAG_BLOCK_GET_ELEMENT(
 			&scen->netgame_flags, i, struct scenario_netgame_flag);
-		if (flag)
+		if (flag && flag->type != FF_NETGAME_FLAG_FIREFIGHT_SPAWN)
 			add_spawn_point(&flag->position, flag->facing);
 	}
 	for (i = 0; i < scen->netgame_equipment.count && g_spawn_point_count < MAX_SPAWN_POINTS; i++)
@@ -824,7 +1060,11 @@ static short get_living_human_player_positions(
 static short select_wave_spawn_zones(
 	real_point3d *out_zones,
 	real *out_facings,
-	short desired_zones)
+	short desired_zones,
+	short round_num,
+	short wave_num,
+	boolean is_bonus,
+	boolean is_boss_wave)
 {
 	real_point3d player_positions[16];
 	short human_count = get_living_human_player_positions(player_positions, NULL, 16);
@@ -833,6 +1073,96 @@ static short select_wave_spawn_zones(
 	short candidate_count = 0;
 	short selected = 0;
 	short i, s;
+
+	/* Custom Forge Firefight Spawn Override:
+	 * When the map has placed Firefight Infantry/Dropship Spawn markers ('ffsp' / flag->type == 15),
+	 * limit AI wave spawning to the user's placed Firefight Spawn markers! */
+	{
+		unsigned long infantry_mask =
+			(1UL << FF_SPAWN_TYPE_AI_INFANTRY) |
+			(1UL << FF_SPAWN_TYPE_AI_AND_VEHICLES) |
+			(1UL << FF_SPAWN_TYPE_DROPSHIP_ZONE);
+		if (count_custom_ff_spawn_markers(infantry_mask) > 0)
+		{
+			real_point3d custom_pts[MAX_SPAWN_POINTS];
+			real custom_facings[MAX_SPAWN_POINTS];
+			int custom_types[MAX_SPAWN_POINTS];
+			short custom_count = collect_matching_custom_ff_spawns(
+				infantry_mask,
+				round_num,
+				wave_num,
+				is_bonus,
+				is_boss_wave,
+				TRUE,
+				custom_pts,
+				custom_facings,
+				custom_types,
+				MAX_SPAWN_POINTS);
+
+			if (custom_count > 0)
+			{
+				/* Prefer custom markers >= 5.0u from living players if multiple markers exist */
+				for (i = 0; i < custom_count; i++)
+				{
+					real min_player_dist = 9999.0f;
+					short p;
+					for (p = 0; p < human_count; p++)
+					{
+						real d = distance3d(&custom_pts[i], &player_positions[p]);
+						if (d < min_player_dist)
+							min_player_dist = d;
+					}
+					if (human_count == 0 || min_player_dist >= 5.0f)
+						candidate_indices[candidate_count++] = i;
+				}
+				if (candidate_count == 0)
+				{
+					for (i = 0; i < custom_count; i++)
+						candidate_indices[candidate_count++] = i;
+				}
+
+				/* If a DROPSHIP ZONE marker is among candidates, place it in slot 0 so the Spirit/Pelican targets it first */
+				for (i = 0; i < candidate_count; i++)
+				{
+					short c_idx = candidate_indices[i];
+					if (custom_types[c_idx] == FF_SPAWN_TYPE_DROPSHIP_ZONE)
+					{
+						out_zones[0] = custom_pts[c_idx];
+						out_facings[0] = custom_facings[c_idx];
+						selected = 1;
+						candidate_indices[i] = candidate_indices[--candidate_count];
+						break;
+					}
+				}
+
+				while (selected < desired_zones && candidate_count > 0)
+				{
+					short pick_slot = (short)(spawner_rand() % (unsigned long)candidate_count);
+					short c_idx = candidate_indices[pick_slot];
+					boolean too_close = FALSE;
+
+					for (s = 0; s < selected; s++)
+					{
+						if (distance3d(&out_zones[s], &custom_pts[c_idx]) < 2.5f)
+						{
+							too_close = TRUE;
+							break;
+						}
+					}
+
+					candidate_indices[pick_slot] = candidate_indices[--candidate_count];
+					if (!too_close || candidate_count == 0)
+					{
+						out_zones[selected] = custom_pts[c_idx];
+						out_facings[selected] = custom_facings[c_idx];
+						selected++;
+					}
+				}
+
+				return selected;
+			}
+		}
+	}
 
 	if (g_spawn_point_count == 0)
 		discover_map_spawn_points();
@@ -2122,7 +2452,8 @@ static long spawn_specific_enemy_vehicle_at(
 	boolean want_wraith,
 	real_point3d const *zone,
 	real facing,
-	short enemy_team)
+	short enemy_team,
+	boolean exact_pad)
 {
 	static char const *const ghost_tags[] = {
 		"vehicles\\ghost\\ghost_mp",
@@ -2163,8 +2494,11 @@ static long spawn_specific_enemy_vehicle_at(
 		patch_vehicle_for_ai_driver(vehicle_tag, is_banshee, is_hover);
 		object_placement_data_new(&placement, vehicle_tag, NONE);
 		placement.position = *zone;
-		placement.position.x += spawner_rand_range(-2.0f, 2.0f);
-		placement.position.y += spawner_rand_range(-2.0f, 2.0f);
+		if (!exact_pad)
+		{
+			placement.position.x += spawner_rand_range(-2.0f, 2.0f);
+			placement.position.y += spawner_rand_range(-2.0f, 2.0f);
+		}
 		if (is_banshee)
 			placement.position.z += 9.0f;
 		else
@@ -2459,7 +2793,11 @@ short firefight_spawn_wave(
 	zone_count = select_wave_spawn_zones(
 		ff_state.wave_spawn_zones,
 		facings,
-		(wave_num == 1 && !is_bonus) ? 2 : FIREFIGHT_MAX_SPAWN_ZONES_PER_WAVE);
+		(wave_num == 1 && !is_bonus) ? 2 : FIREFIGHT_MAX_SPAWN_ZONES_PER_WAVE,
+		round_num,
+		wave_num,
+		is_bonus,
+		is_boss_wave);
 	ff_state.wave_spawn_zone_count = zone_count;
 	for (i = 0; i < zone_count && i < FIREFIGHT_MAX_SPAWN_ZONES_PER_WAVE; i++)
 		g_active_wave_facings[i] = facings[i];
@@ -2547,34 +2885,125 @@ short firefight_spawn_wave(
 			}
 		}
 
-		/* Spawn Round-Scheduled Enemy Vehicles (Ghosts in Rounds 4 & 5; Wraiths in Round 5 Waves 2 & 3) */
+		/* Spawn Round-Scheduled or Marker-Scheduled Enemy Vehicles:
+		 * - Default stock maps without custom Firefight Spawn markers keep normal Round 4/5 vehicle spawns.
+		 * - Custom maps OR any map with placed Firefight Spawn markers only spawn enemy vehicles at approved
+		 *   vehicle spawn points (AI + VEHICLES, ENEMY VEHICLE, ENEMY GHOST, ENEMY HEAVY VEH) matching the round/wave! */
 		if (!is_bonus && zone_count > 0)
 		{
 			short enemy_team = forced_team != NONE ? forced_team : _game_team_covenant;
+			boolean require_approved_veh_markers = (map_has_any_custom_ff_spawns() || !is_default_stock_map());
 			short v;
 
-			for (v = 0; v < spec->ghosts; v++)
+			if (require_approved_veh_markers)
 			{
-				short z = (short)((zone_count - 1 - (v % zone_count) + zone_count) % zone_count);
-				if (spawn_specific_enemy_vehicle_at(
-					FALSE,
-					&ff_state.wave_spawn_zones[z],
-					facings[z],
-					enemy_team) != NONE)
+				real_point3d veh_pts[32];
+				real veh_facings[32];
+				int veh_types[32];
+				unsigned long ghost_mask =
+					(1UL << FF_SPAWN_TYPE_AI_AND_VEHICLES) |
+					(1UL << FF_SPAWN_TYPE_ENEMY_VEHICLE) |
+					(1UL << FF_SPAWN_TYPE_ENEMY_GHOST);
+				unsigned long wraith_mask =
+					(1UL << FF_SPAWN_TYPE_AI_AND_VEHICLES) |
+					(1UL << FF_SPAWN_TYPE_ENEMY_VEHICLE) |
+					(1UL << FF_SPAWN_TYPE_ENEMY_HEAVY_VEH);
+				short ghost_pad_count = collect_matching_custom_ff_spawns(
+					ghost_mask, round_num, wave_num, is_bonus, is_boss_wave, FALSE,
+					veh_pts, veh_facings, veh_types, 32);
+				short ghosts_to_spawn = spec->ghosts;
+
+				if (ghost_pad_count > 0)
 				{
-					spawned_count++;
+					if (ghosts_to_spawn == 0)
+					{
+						short dedicated_ghosts = 0;
+						for (v = 0; v < ghost_pad_count; v++)
+						{
+							if (veh_types[v] == FF_SPAWN_TYPE_ENEMY_GHOST ||
+								veh_types[v] == FF_SPAWN_TYPE_ENEMY_VEHICLE)
+							{
+								dedicated_ghosts++;
+							}
+						}
+						ghosts_to_spawn = MIN(dedicated_ghosts, (short)2);
+					}
+					for (v = 0; v < ghosts_to_spawn; v++)
+					{
+						short p_idx = (short)((v + (short)spawner_rand()) % ghost_pad_count);
+						if (spawn_specific_enemy_vehicle_at(
+							FALSE,
+							&veh_pts[p_idx],
+							veh_facings[p_idx],
+							enemy_team,
+							v == 0 || ghost_pad_count > 1) != NONE)
+						{
+							spawned_count++;
+						}
+					}
+				}
+
+				{
+					short wraith_pad_count = collect_matching_custom_ff_spawns(
+						wraith_mask, round_num, wave_num, is_bonus, is_boss_wave, FALSE,
+						veh_pts, veh_facings, veh_types, 32);
+					short wraiths_to_spawn = spec->wraiths;
+
+					if (wraith_pad_count > 0)
+					{
+						if (wraiths_to_spawn == 0)
+						{
+							short dedicated_heavy = 0;
+							for (v = 0; v < wraith_pad_count; v++)
+							{
+								if (veh_types[v] == FF_SPAWN_TYPE_ENEMY_HEAVY_VEH)
+									dedicated_heavy++;
+							}
+							wraiths_to_spawn = MIN(dedicated_heavy, (short)1);
+						}
+						for (v = 0; v < wraiths_to_spawn; v++)
+						{
+							short p_idx = (short)((v + (short)spawner_rand()) % wraith_pad_count);
+							if (spawn_specific_enemy_vehicle_at(
+								TRUE,
+								&veh_pts[p_idx],
+								veh_facings[p_idx],
+								enemy_team,
+								v == 0 || wraith_pad_count > 1) != NONE)
+							{
+								spawned_count++;
+							}
+						}
+					}
 				}
 			}
-			for (v = 0; v < spec->wraiths; v++)
+			else
 			{
-				short z = (short)(v % zone_count);
-				if (spawn_specific_enemy_vehicle_at(
-					TRUE,
-					&ff_state.wave_spawn_zones[z],
-					facings[z],
-					enemy_team) != NONE)
+				for (v = 0; v < spec->ghosts; v++)
 				{
-					spawned_count++;
+					short z = (short)((zone_count - 1 - (v % zone_count) + zone_count) % zone_count);
+					if (spawn_specific_enemy_vehicle_at(
+						FALSE,
+						&ff_state.wave_spawn_zones[z],
+						facings[z],
+						enemy_team,
+						FALSE) != NONE)
+					{
+						spawned_count++;
+					}
+				}
+				for (v = 0; v < spec->wraiths; v++)
+				{
+					short z = (short)(v % zone_count);
+					if (spawn_specific_enemy_vehicle_at(
+						TRUE,
+						&ff_state.wave_spawn_zones[z],
+						facings[z],
+						enemy_team,
+						FALSE) != NONE)
+					{
+						spawned_count++;
+					}
 				}
 			}
 		}
@@ -3003,6 +3432,9 @@ void firefight_spawn_scheduled_round_vehicles(short round_num, boolean pre_boss)
 	long player_units[16];
 	short player_count = get_living_player_positions(player_positions, player_units, 16);
 	real_point3d drop_pos;
+	real drop_facing = 0.0f;
+	boolean has_custom_pad = FALSE;
+	boolean require_approved_veh_markers = (map_has_any_custom_ff_spawns() || !is_default_stock_map());
 	struct object_placement_data placement;
 	long vehicle_index;
 	short slot;
@@ -3010,38 +3442,74 @@ void firefight_spawn_scheduled_round_vehicles(short round_num, boolean pre_boss)
 	if (pre_boss || !global_variant.game_engine_variant.firefight.vehicle_drops_enabled)
 		return;
 
-	/* Round 4 drops 1 Warthog; Round 5 drops 1 Scorpion (single vehicle only, does not scale with player count) */
-	if (round_num == 4)
+	if (require_approved_veh_markers)
 	{
-		byte early_type = (opts && opts->firefight_early_vehicle != _firefight_early_vehicle_none) ?
-			opts->firefight_early_vehicle : _firefight_early_vehicle_warthog;
-		vehicle_tag = resolve_early_vehicle_tag(early_type);
+		real_point3d pad_pts[16];
+		real pad_facings[16];
+		int pad_types[16];
+		unsigned long player_pad_mask = (1UL << FF_SPAWN_TYPE_PLAYER_VEHICLE);
+		short pad_count = collect_matching_custom_ff_spawns(
+			player_pad_mask, round_num, 1, FALSE, FALSE, FALSE,
+			pad_pts, pad_facings, pad_types, 16);
+
+		/* For Rounds 4 & 5, also allow general AI + VEHICLES pads if no dedicated PLAYER VEH PAD was placed */
+		if (pad_count == 0 && (round_num == 4 || round_num == 5))
+		{
+			pad_count = collect_matching_custom_ff_spawns(
+				(1UL << FF_SPAWN_TYPE_PLAYER_VEHICLE) | (1UL << FF_SPAWN_TYPE_AI_AND_VEHICLES),
+				round_num, 1, FALSE, FALSE, TRUE,
+				pad_pts, pad_facings, pad_types, 16);
+		}
+
+		if (pad_count <= 0)
+			return;
+
+		{
+			short pick = (short)(spawner_rand() % (unsigned long)pad_count);
+			drop_pos = pad_pts[pick];
+			drop_facing = pad_facings[pick];
+			has_custom_pad = TRUE;
+		}
 	}
-	else if (round_num == 5)
+
+	/* Round 4 (or earlier rounds when a custom PLAYER VEH PAD is configured for that round) drops 1 Warthog;
+	 * Round 5 drops 1 Scorpion (single vehicle only, does not scale with player count) */
+	if (round_num == 5)
 	{
 		byte late_type = (opts && opts->firefight_late_vehicle != _firefight_late_vehicle_none) ?
 			opts->firefight_late_vehicle : _firefight_late_vehicle_scorpion;
 		vehicle_tag = resolve_late_vehicle_tag(late_type);
 	}
+	else if (round_num == 4 || has_custom_pad)
+	{
+		byte early_type = (opts && opts->firefight_early_vehicle != _firefight_early_vehicle_none) ?
+			opts->firefight_early_vehicle : _firefight_early_vehicle_warthog;
+		vehicle_tag = resolve_early_vehicle_tag(early_type);
+	}
 
 	if (vehicle_tag == NONE)
 		return;
 
-	if (player_count == 0)
+	if (!has_custom_pad)
 	{
-		real fallback_facing = 0.0f;
-		if (!firefight_select_player_spawn_point(0, &player_positions[0], &fallback_facing))
-			return;
-		player_units[0] = NONE;
-	}
+		if (player_count == 0)
+		{
+			real fallback_facing = 0.0f;
+			if (!firefight_select_player_spawn_point(0, &player_positions[0], &fallback_facing))
+				return;
+			player_units[0] = NONE;
+		}
 
-	calculate_safe_player_resupply_point(&player_positions[0], player_units[0], &drop_pos);
-	drop_pos.x -= 3.5f;
-	drop_pos.y += 3.0f;
+		calculate_safe_player_resupply_point(&player_positions[0], player_units[0], &drop_pos);
+		drop_pos.x -= 3.5f;
+		drop_pos.y += 3.0f;
+	}
 	project_point_to_ground(&drop_pos, 0.75f);
 
 	object_placement_data_new(&placement, vehicle_tag, NONE);
 	placement.position = drop_pos;
+	if (has_custom_pad)
+		vector3d_from_angle(&placement.forward, drop_facing);
 	placement.owner_team_index = _game_team_player;
 
 	vehicle_index = object_new(&placement);

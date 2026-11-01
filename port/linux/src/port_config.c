@@ -620,14 +620,14 @@ static const struct config_setting config_settings[] =
 		"after the last finished). \"all_unlocked\": every one of the ten can be\n"
 		"chosen, whatever the profile has finished; what it has finished is\n"
 		"kept, and shown as before." },
-	{ "game.randomizer", _config_boolean, "true", "HALO_RANDOMIZER", _environment_value, _platform_all,
+	{ "game.randomizer", _config_boolean, "false", "HALO_RANDOMIZER", _environment_value, _platform_all,
 		"Settings > Gameplay. true: after the difficulty of one of the ten\n"
 		"campaign levels, a screen sets how that level's enemies and weapons\n"
 		"are swapped. The choice is kept for the later levels. A co-op game\n"
 		"that is actually randomized is listed with \"[RNDM MOD]\" before its\n"
 		"level's name, and a player whose build cannot run it is refused.\n"
 		"A slayer game is not randomized." },
-	{ "game.randomizer_enemies", _config_boolean, "true", "HALO_RANDOMIZER_ENEMIES", _environment_value, _platform_all,
+	{ "game.randomizer_enemies", _config_boolean, "false", "HALO_RANDOMIZER_ENEMIES", _environment_value, _platform_all,
 		"The randomizer screen. true: a squad's actors are taken from the\n"
 		"pool, except one with a command list or in a conversation." },
 	{ "game.randomizer_allies", _config_boolean, "false", "HALO_RANDOMIZER_ALLIES", _environment_value, _platform_all,
@@ -636,10 +636,10 @@ static const struct config_setting config_settings[] =
 		"in a vehicle it has no animations for rides as the actor the level gave\n"
 		"it, until it is out and on its feet). false: they stay the actors the\n"
 		"level gave them." },
-	{ "game.randomizer_pickups", _config_boolean, "true", "HALO_RANDOMIZER_PICKUPS", _environment_value, _platform_all,
+	{ "game.randomizer_pickups", _config_boolean, "false", "HALO_RANDOMIZER_PICKUPS", _environment_value, _platform_all,
 		"The randomizer screen. true: a weapon lying in the level is swapped\n"
 		"for another, except one a script names." },
-	{ "game.randomizer_enemy_weapons", _config_boolean, "true", "HALO_RANDOMIZER_ENEMY_WEAPONS", _environment_value, _platform_all,
+	{ "game.randomizer_enemy_weapons", _config_boolean, "false", "HALO_RANDOMIZER_ENEMY_WEAPONS", _environment_value, _platform_all,
 		"The randomizer screen. true: the weapon an actor is given is swapped\n"
 		"for another that actor can hold." },
 	{ "game.randomizer_pool", _config_string, "\"any\"", "HALO_RANDOMIZER_POOL", _environment_value, _platform_all,
@@ -1205,7 +1205,7 @@ static const struct config_setting config_settings[] =
 		"The Discord application internet play invites go through while the\n"
 		"Discord desktop client runs; empty for none." },
 
-	{ "game.daily_challenge", _config_boolean, "true", "HALO_DAILY_CHALLENGE", _environment_value, _platform_all,
+	{ "game.daily_challenge", _config_boolean, "false", "HALO_DAILY_CHALLENGE", _environment_value, _platform_all,
 		"Settings > Gameplay > Community's DAILY CHALLENGE: Campaign's DAILY\n"
 		"CHALLENGE, a level a day with the randomizer and skulls set, the same\n"
 		"for everyone (port/linux/game/community.c). false: no such item." },

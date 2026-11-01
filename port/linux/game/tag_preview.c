@@ -48,6 +48,10 @@ fill the widget's shape whichever way it has turned.
 #include <stdlib.h>
 #include <string.h>
 
+#undef malloc
+#undef free
+#undef realloc
+
 /* ---------- constants */
 
 /* the picture: of the widget's shape, more texels than the widget has
@@ -161,12 +165,20 @@ static struct
 
 /* ---------- private code */
 
+static void tag_preview_mesh_free(
+	struct tag_injector_mesh *m)
+{
+	if (!m)
+		return;
+	tag_injector_mesh_free(m);
+}
+
 static void tag_preview_forget(
 	void)
 {
 	short index;
 
-	tag_injector_mesh_free(&tag_preview.mesh);
+	tag_preview_mesh_free(&tag_preview.mesh);
 	/* (the game's free does not take NULL) */
 	for (index = 0; index < TAG_INJECTOR_MESH_MAXIMUM_TEXTURES; index++)
 	{
@@ -763,6 +775,7 @@ static void tag_preview_draw(
 		tag_preview.depths[index] = -FLT_MAX;
 	for (index = 0; index < tag_preview.mesh.triangle_count; index++)
 		tag_preview_triangle(texels, index);
+	bitmap_rebuild(tag_preview.bitmap);
 	rasterizer_bitmap_changed(tag_preview.bitmap);
 	tag_preview.drawn_time = now;
 	tag_preview.drawn = TRUE;
@@ -776,8 +789,8 @@ void tag_preview_map_tag(
 {
 	char key[TAG_PREVIEW_KEY_LENGTH];
 
-	snprintf(key, sizeof(key), "map %d %lu %s", tag_injector_map_opened(), tag_injector_category_group(category),
-		tag_injector_category_tag(category, index));
+	snprintf(key, sizeof(key), "map %d %lu %ld %s", tag_injector_map_opened(), tag_injector_category_group(category),
+		index, tag_injector_category_tag(category, index));
 	tag_preview_choose(key, _tag_preview_map_tag, category, index);
 }
 

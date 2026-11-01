@@ -368,8 +368,15 @@ void bots_tactics_update(void)
 {
 	long now = game_time_get();
 
-	bots_tactics.game = game_engine_get_variant()->game_engine_index;
-	bots_tactics.assault = bots_tactics.game == game_engine_ctf && game_engine_get_variant()->game_engine_variant.ctf.assault;
+	bots_tactics.game = (game_engine_running() && game_engine_get_variant()) ?
+		game_engine_get_variant()->game_engine_index : game_engine_none;
+	bots_tactics.assault = bots_tactics.game == game_engine_ctf &&
+		game_engine_get_variant()->game_engine_variant.ctf.assault;
+	if (bots_tactics.game == game_engine_none || bots_tactics.game == game_engine_firefight)
+	{
+		bots_tactics.prepared = TRUE;
+		return;
+	}
 	/* the map's lanes and vantage points, a bounded step a tick (the work a
 	tick fixed, not timed: the same ticks from run to run) */
 	if (!bots_tactics.prepared)

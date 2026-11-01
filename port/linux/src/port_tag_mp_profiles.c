@@ -160,7 +160,7 @@ static int names_compare(const char *first, const char *second)
 
 static void folder_path(const struct profile_kind *kind, char *path, size_t size)
 {
-	snprintf(path, size, "%s/tag_injector/%s", platform_data_root(), kind->folder);
+	snprintf(path, size, "%s/Faber_data/tag_vault/%s", platform_data_root(), kind->folder);
 }
 
 /* an earlier build's folder of the kind's profiles moved to the folder's
@@ -171,7 +171,7 @@ static void folder_move(const struct profile_kind *kind)
 	char path[MAXIMUM_PATH_LENGTH];
 	struct posix_file_information information;
 
-	snprintf(old_path, sizeof(old_path), "%s/tag_injector/%s", platform_data_root(), kind->old_folder);
+	snprintf(old_path, sizeof(old_path), "%s/Faber_data/tag_vault/%s", platform_data_root(), kind->old_folder);
 	folder_path(kind, path, sizeof(path));
 	if (posix_stat(old_path, &information) != 0 || !(information.flags & _posix_file_is_directory) ||
 		posix_stat(path, &information) == 0)
@@ -485,8 +485,10 @@ static int profile_write(const struct profile_kind *kind, const struct mp_profil
 			snprintf(text + strlen(text), capacity - strlen(text), "]\n");
 		}
 	}
-	/* (the tag_injector folder first, which a profile may not have made yet) */
-	snprintf(folder, sizeof(folder), "%s/tag_injector", platform_data_root());
+	/* (the Faber_data/tag_vault folder first, which a profile may not have made yet) */
+	snprintf(folder, sizeof(folder), "%s/Faber_data", platform_data_root());
+	posix_make_directory(folder);
+	snprintf(folder, sizeof(folder), "%s/Faber_data/tag_vault", platform_data_root());
 	posix_make_directory(folder);
 	folder_move(kind);
 	folder_path(kind, folder, sizeof(folder));

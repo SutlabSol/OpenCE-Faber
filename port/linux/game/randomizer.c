@@ -3965,6 +3965,77 @@ static void multiplayer_tags_loaded(char const *scenario_name, long profile, int
 	}
 }
 
+static int is_saved_forge_map(char const *scenario_name)
+{
+	char const *leaf = scenario_name ? tag_name_strip_path(scenario_name) : NULL;
+	char path[512];
+	FILE *f;
+	unsigned char hdr[0x200];
+
+	if (!leaf || !leaf[0])
+		return 0;
+	snprintf(path, sizeof(path), "custom_maps/%s.map", leaf);
+	f = fopen(path, "rb");
+	if (!f)
+		return 0;
+	if (fread(hdr, 1, sizeof(hdr), f) != sizeof(hdr))
+	{
+		fclose(f);
+		return 0;
+	}
+	fclose(f);
+	return (*(unsigned long const *)(hdr + 0x1FC) == 0x464C4731UL) ? 1 : 0;
+}
+
+static int vault_profile_has_enabled_tags(long profile)
+{
+	long t, n;
+
+	if (profile == NONE)
+		return 0;
+	n = port_tag_profiles_tag_count(profile);
+	for (t = 0; t < n; t++)
+	{
+		if (port_tag_profiles_tag_enabled(profile, t))
+			return 1;
+	}
+	return 0;
+}
+
+static void forge_vault_tags_loaded(char const *scenario_name, long profile)
+{
+	int index;
+
+	custom_profile = profile;
+	snprintf(map_name_leaf, sizeof(map_name_leaf), "%s", tag_name_strip_path(scenario_name));
+	stock_hud_count = custom_profile != NONE ? tag_injector_tags_read(custom_profile, stock_huds, STOCK_HUD_MAX) : 0;
+	if (stock_hud_count && gather_begin())
+	{
+		gather_stock_huds(map_name_leaf);
+		import_wanted();
+	}
+	custom_root_count = custom_profile != NONE ?
+		tag_injector_tags_load(custom_profile, custom_roots, custom_root_tags, CUSTOM_ROOT_MAX) : 0;
+	donor_reads = 0;
+	donor_misses = 0;
+	donor_logged = 0;
+	donor_saw_bitmap = 0;
+	donor_saw_sound = 0;
+	memset(donor_noted, 0, sizeof(donor_noted));
+	for (index = 0; index < donor_count; index++)
+		error(_error_silent, "randomizer: %s.map keeps %ld pack ranges",
+			donors[index].leaf, donors[index].from_pack ? donors[index].span_count : 0);
+	wanted_free();
+	{
+		long count;
+		unsigned long hash;
+
+		randomizer_tag_table_fingerprint(&count, &hash);
+		error(_error_silent, "forge vault: %s's tag table: %ld tags, fingerprint %08lx",
+			map_name_leaf, count, hash);
+	}
+}
+
 static int firefight_wanted(void)
 {
 	struct network_game *game = network_game_get_game();
@@ -4275,6 +4346,46 @@ void randomizer_tags_loaded(char const *scenario_name)
 			return;
 		}
 	}
+	/* (Forge Mode's Faber Tag Vault bundles, injected into the map when
+	Forge Mode is active or when loading a saved Forge map) */
+	{
+		extern int g_forge_session_enabled;
+
+		if (g_forge_session_enabled || is_saved_forge_map(scenario_name))
+		{
+			char const *cfg_prof = config_string("randomizer.tag_profile");
+			long profile = NONE;
+
+			port_tag_profiles_scan();
+			if (cfg_prof && cfg_prof[0])
+			{
+				profile = port_tag_profiles_find(cfg_prof);
+				if (profile != NONE && !vault_profile_has_enabled_tags(profile))
+					profile = NONE;
+			}
+			if (profile == NONE)
+			{
+				profile = port_tag_profiles_find("creation_hub");
+				if (profile != NONE && !vault_profile_has_enabled_tags(profile))
+					profile = NONE;
+			}
+			if (profile == NONE)
+			{
+				long p, n = port_tag_profiles_count();
+				for (p = 0; p < n; p++)
+				{
+					if (vault_profile_has_enabled_tags(p))
+					{
+						profile = p;
+						break;
+					}
+				}
+			}
+			if (profile != NONE && vault_profile_has_enabled_tags(profile))
+				forge_vault_tags_loaded(scenario_name, profile);
+			return;
+		}
+	}
 	firefight = firefight_wanted();
 	if (!campaign_leaf(scenario_name, leaf, sizeof(leaf)))
 	{
@@ -4299,19 +4410,10 @@ void randomizer_tags_loaded(char const *scenario_name)
 	{
 		memset(&current, 0, sizeof(current));
 	}
-	else if (network_game_distributed_client())
+	else
 	{
-		if (remote_on)
-		{
-			setup_from_remote(&current);
-			placement_roll_from_remote();
-			randomize = setup_swaps(&current);
-		}
-	}
-	else if (config_boolean("game.randomizer"))
-	{
-		setup_from_config(&current);
-		randomize = setup_swaps(&current);
+		memset(&current, 0, sizeof(current));
+		randomize = 0;
 	}
 	/* (and the skull the enemies carry, which the randomizer may be off for) */
 	skull = firefight ? 1 : skulls_carried_wanted();
@@ -5228,65 +5330,25 @@ int randomizer_unit_can_carry(char const *tag_name)
 
 void randomizer_advertisement(unsigned char *reserved)
 {
-	struct network_game *game = network_game_get_game();
-	struct setup setup;
-	char leaf[32];
-
-	if (!reserved || !game || game->variant.game_engine_index != game_engine_none)
-		return;
-	if (!config_boolean("game.randomizer") || !campaign_leaf(game->map.name, leaf, sizeof(leaf)))
-		return;
-	/* (a co-op game playing a campaign profile, in the randomizer's place:
-	its clients add the host's share instead, tag_multiplayer.c) */
-	if (tag_multiplayer_campaign_hosted())
-		return;
-	setup_from_config(&setup);
-	if (!setup_swaps(&setup))
-		return;
-	/* (a daily challenge's lobby rolls its seed: its clients lay the level
-	out as every challenger does, community.c) */
-	if (!placement_roll_ready)
-		placement_roll_new(game->map.name);
-	reserved[HALO_PORT_ADVERTISED_FLAGS_OFFSET] =
-		(unsigned char)(reserved[HALO_PORT_ADVERTISED_FLAGS_OFFSET] | HALO_PORT_ADVERTISED_RANDOMIZER_FLAG);
-	reserved[HALO_PORT_ADVERTISED_RANDOMIZER_SETUP_OFFSET] =
-		(unsigned char)((setup.enemies ? 1 : 0) | (setup.pickups ? 2 : 0) | (setup.weapons ? 4 : 0) |
-			(setup.allies ? 8 : 0) | (setup.crazy ? 16 : 0) | (setup.custom_type ? 32 : 0) |
-			(setup.pickup_custom_type ? 64 : 0) | (setup.weapon_custom_type ? 128 : 0));
-	reserved[HALO_PORT_ADVERTISED_RANDOMIZER_SETUP_OFFSET + 1] = (unsigned char)setup.pool;
-	reserved[HALO_PORT_ADVERTISED_RANDOMIZER_SETUP_OFFSET + 2] = (unsigned char)setup.type;
-	reserved[HALO_PORT_ADVERTISED_RANDOMIZER_ROLL_OFFSET] = (unsigned char)placement_roll;
-	reserved[HALO_PORT_ADVERTISED_RANDOMIZER_ROLL_OFFSET + 1] = (unsigned char)(placement_roll >> 8);
-	reserved[HALO_PORT_ADVERTISED_RANDOMIZER_ROLL_OFFSET + 2] = (unsigned char)(placement_roll >> 16);
-	reserved[HALO_PORT_ADVERTISED_RANDOMIZER_ROLL_OFFSET + 3] = (unsigned char)(placement_roll >> 24);
-	reserved[HALO_PORT_ADVERTISED_RANDOMIZER_WEAPONS_OFFSET] = (unsigned char)setup.rank;
-	reserved[HALO_PORT_ADVERTISED_RANDOMIZER_WEAPONS_OFFSET + 1] = (unsigned char)setup.pickup_pool;
-	reserved[HALO_PORT_ADVERTISED_RANDOMIZER_WEAPONS_OFFSET + 2] = (unsigned char)setup.pickup_type;
-	reserved[HALO_PORT_ADVERTISED_RANDOMIZER_WEAPONS_OFFSET + 3] = (unsigned char)setup.weapon_pool;
-	reserved[HALO_PORT_ADVERTISED_RANDOMIZER_WEAPONS_OFFSET + 4] = (unsigned char)setup.weapon_type;
-	reserved[HALO_PORT_ADVERTISED_RANDOMIZER_CRAZY_OFFSET] =
-		(unsigned char)(HALO_PORT_ADVERTISED_RANDOMIZER_CRAZY_SET | (setup.any_weapon ? 1 : 0) |
-			(setup.odd_enemies ? 2 : 0) | (setup.flamethrower ? 4 : 0) | (setup.pods << 4));
+	(void)reserved;
 }
 
 void randomizer_set_remote(int on, unsigned char const *setup, unsigned char crazy)
 {
-	remote_on = on && setup;
-	if (remote_on)
-	{
-		memcpy(remote_setup, setup, sizeof(remote_setup));
-		remote_crazy = crazy;
-	}
+	(void)on;
+	(void)setup;
+	(void)crazy;
+	remote_on = 0;
 }
 
 int randomizer_remote_on(void)
 {
-	return remote_on;
+	return 0;
 }
 
 int randomizer_show_prefix(void)
 {
-	return host_randomized();
+	return 0;
 }
 
 void randomizer_note_map_widget(void *widget)
@@ -5296,17 +5358,7 @@ void randomizer_note_map_widget(void *widget)
 
 wchar_t const *randomizer_level_title_text(void *widget, wchar_t const *string)
 {
-	static wchar_t const prefix[] = L"[RNDM MOD] ";
-	int index;
-	int out;
-
-	if (widget != map_widget || !string || !randomizer_show_prefix())
-		return NULL;
-	for (out = 0; prefix[out] && out < (int)NUMBEROF(prefixed_title) - 1; out++)
-		prefixed_title[out] = prefix[out];
-	for (index = 0; string[index] && out < (int)NUMBEROF(prefixed_title) - 1; index++, out++)
-		prefixed_title[out] = string[index];
-	prefixed_title[out] = 0;
-
-	return prefixed_title;
+	(void)widget;
+	(void)string;
+	return NULL;
 }

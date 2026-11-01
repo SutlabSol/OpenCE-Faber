@@ -68,6 +68,11 @@ FORGE_OBJCOPY_REDEFINES: Dict[str, List[str]] = {
     "source/interface/first_person_weapons.c": [
         "--redefine-sym", "_first_person_weapon_draw=_orig_first_person_weapon_draw",
     ],
+    "source/interface/hud_draw.c": [
+        "--redefine-sym", "_hud_draw_bitmap_direct=_orig_hud_draw_bitmap_direct",
+        "--redefine-sym", "_hud_draw_numbers=_orig_hud_draw_numbers",
+        "--redefine-sym", "_real_argb_color_to_pixel32=_orig_real_argb_color_to_pixel32",
+    ],
     "source/interface/hud_weapon.c": [
         "--redefine-sym", "_hud_render_weapon_interface=_orig_hud_render_weapon_interface",
     ],
@@ -734,26 +739,21 @@ def generate_windows_build(n: Writer, sln: Any) -> None:
         name="windows_faber_package",
         command=(
             '$python -c "import os,shutil; '
+            'os.path.isdir(\'build/windows/Faber_data\') and shutil.rmtree(\'build/windows/Faber_data\'); '
             'os.makedirs(\'build/windows/Faber_data\', exist_ok=True); '
             'p = \'build/windows/OpenCE - Faber.exe\'; '
             'shutil.copyfile(\'build/windows/halo.exe\', p); '
             '[os.path.exists(g) and os.remove(g) for g in ('
             '\'build/windows/OpenCE - Faber.exe.old\', '
-            '\'build/windows/OpenCE - Genesis.exe\', \'build/windows/OpenCE - Genesis.exe.old\', '
-            '\'build/windows/Faber_data/SDL3.dll\', \'build/windows/Faber_data/brokers.txt\', '
-            '\'build/windows/Faber_data/config.toml\', \'build/windows/Faber_data/halo.log\', '
-            '\'build/windows/Faber_data/device_identity.txt\', '
-            '\'build/windows/Faber_data/cached_tags/catalog.txt\', '
-            '\'build/windows/Faber_data/cached_tags/custom_catalog.txt\')]; '
-            '[os.path.isdir(d) and shutil.rmtree(d) for d in ('
-            '\'build/windows/Faber_data/assets\', \'build/windows/Faber_data/menus\', '
-            '\'build/windows/Faber_data/forge_maps\', \'build/windows/Faber_data/saves\', '
-            '\'build/windows/Faber_data/tools\', \'build/windows/Faber_data/ocetags\')]; '
+            '\'build/windows/OpenCE - Genesis.exe\', \'build/windows/OpenCE - Genesis.exe.old\')]; '
             'os.path.isdir(\'port/forge/assets/ui\') and shutil.copytree(\'port/forge/assets/ui\', \'build/windows/Faber_data/ui\', dirs_exist_ok=True); '
             'os.path.isdir(\'port/forge/assets/cached_tags\') and shutil.copytree(\'port/forge/assets/cached_tags\', \'build/windows/Faber_data/cached_tags\', dirs_exist_ok=True); '
             'os.path.isdir(\'port/forge/assets/custom_tags\') and shutil.copytree(\'port/forge/assets/custom_tags\', \'build/windows/Faber_data/custom_tags\', dirs_exist_ok=True); '
             'os.path.exists(\'port/forge/assets/credits.md\') and shutil.copyfile(\'port/forge/assets/credits.md\', \'build/windows/Faber_data/credits.md\'); '
-            'os.makedirs(\'build/windows/Faber_data/custom_tags\', exist_ok=True)"'
+            'os.makedirs(\'build/windows/Faber_data/custom_tags\', exist_ok=True); '
+            'shutil.copyfile(\'build/windows/halo.exe\', \'OpenCE - Faber.exe\'); '
+            'shutil.copyfile(\'build/windows/halo.exe\', \'halo.exe\'); '
+            'shutil.copyfile(\'build/windows/SDL3.dll\', \'SDL3.dll\')"'
         ),
         description="WINDOWS FABER PACKAGE build/windows/OpenCE - Faber.exe + Faber_data/",
     )

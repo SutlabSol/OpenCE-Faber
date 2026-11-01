@@ -1051,7 +1051,7 @@ static struct pack_kind const skulls_kind =
 
 int randomizer_pack_build(void)
 {
-	return pack_build(&randomizer_kind);
+	return 0;
 }
 
 /* ---------- when it is written */
@@ -1151,85 +1151,28 @@ static void pack_request(struct pack_kind const *kind)
 /* a pack's notice or dialog up, or a pack waiting for its turn */
 int randomizer_pack_busy(void)
 {
-	return pack_current != NULL || pack_queued > 0;
+	return 0;
 }
 
 int randomizer_pack_ready(void)
 {
-	return pack_ready(&randomizer_kind);
+	return 1;
 }
 
 int skulls_pack_ready(void)
 {
-	return pack_ready(&skulls_kind);
+	return 1;
 }
 
 void randomizer_pack_request(void)
 {
-	pack_request(&randomizer_kind);
 }
 
 void skulls_pack_request(void)
 {
-	pack_request(&skulls_kind);
 }
 
 void randomizer_pack_update(boolean main_menu)
 {
-	static int checked;
-
-	if (!main_menu)
-		return;
-	/* (at start-up, with the randomizer, or skulls to find, already on; or
-	the daily challenge in the Campaign menu, whose levels are randomized
-	and have skulls whatever those settings say, as a co-op host's choice
-	of one has) */
-	if (!checked)
-	{
-		int daily = config_boolean("game.daily_challenge");
-
-		checked = 1;
-		if (daily || config_boolean("game.randomizer"))
-			randomizer_pack_request();
-		if (daily || skulls_pack_wanted())
-			skulls_pack_request();
-	}
-	switch (pack_step)
-	{
-	case _pack_idle:
-		if (!pack_queued || ui_widget_port_error_showing())
-			return;
-		pack_current = pack_queue[0];
-		pack_queued--;
-		memmove(pack_queue, pack_queue + 1, (unsigned long)pack_queued * sizeof(*pack_queue));
-		display_error_text_deferred(pack_current->notice, 0);
-		pack_step = _pack_notice;
-		return;
-	case _pack_notice:
-		if (ui_widget_port_error_showing())
-			return;
-		status_set(pack_current->building, 0, "");
-		display_error_text_deferred(status_text, 0);
-		pack_step = _pack_dialog_asked;
-		return;
-	case _pack_dialog_asked:
-		/* (it opens as the widgets update, after this; the pack is written
-		only once it is drawn over the menu) */
-		if (ui_widget_port_error_open())
-			pack_step = _pack_dialog_up;
-		else if (!ui_widget_port_error_showing())
-		{
-			pack_step = _pack_idle;
-			pack_current = NULL;
-		}
-		return;
-	case _pack_dialog_up:
-		pack_step = _pack_idle;
-		if (pack_build(pack_current))
-			status_set(pack_current->ready, -1, NULL);
-		else
-			status_set(pack_current->failed, -1, NULL);
-		pack_current = NULL;
-		return;
-	}
+	(void)main_menu;
 }
