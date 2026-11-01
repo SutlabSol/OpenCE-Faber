@@ -121,16 +121,46 @@ char const *network_replay_page_address(void);
 
 /* ---------- playback (network_replay_playback.c) */
 
+/* whether a replay has stopped since this was last asked: the main menu,
+as it loads, opens the Theater it was played from (ui_widget.c) */
+boolean network_replay_theater_wanted(void);
+
 /* plays the replay at path (its game is loaded at the next frame); FALSE,
 with why in why, for one that cannot be played (not a replay, an older
-format, another network version) */
+format, a network version it cannot read) */
 boolean network_replay_watch(char const *path, char *why, long why_size);
+
+/* whether a replay of the network version can be played: this one's, or an
+older one whose messages are this one's but for the kinds
+network_replay_skips_message leaves out (port/linux/network_format.txt) */
+boolean network_replay_network_version_playable(unsigned long network_version);
+
+/* whether a distributed message of the kind is not read from the replay
+being played: one whose layout changed since its network version
+(network_distributed.c) */
+boolean network_replay_skips_message(byte type);
 
 /* whether a replay is being played (or its game loaded) */
 boolean network_replay_playing(void);
 /* whether its pause menu is up (xinput_sdl.c: the key that hides the lines
 over the screen does not also leave the replay from it) */
 boolean network_replay_paused(void);
+
+/* a skip ahead's held frame (render.c, rasterizer_xbox_screen_effect.c):
+whether the frame being drawn is the one to hold (its 3D view copied, and
+whether it was), and whether a frame's view is the one held */
+boolean network_replay_hold_wanted(void);
+void network_replay_hold_taken(boolean held);
+boolean network_replay_frozen(void);
+
+/* the most ticks a frame may run (a network client's, ticks, given): more
+while a skip ahead plays fast, never past where it goes (game_time.c) */
+long network_replay_ticks_per_frame(long ticks);
+
+/* before each tick a replay's playback runs, the records of the ticks the
+clock has reached, as a client reads its host's between ticks (game_time.c):
+a frame may run several */
+void network_replay_playback_tick(void);
 
 /* the playback's view made for this frame (main.c, before the sound and
 the windows: each asks network_replay_camera for it) */

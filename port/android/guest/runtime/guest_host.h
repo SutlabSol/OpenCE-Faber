@@ -68,8 +68,13 @@ int host_sdl_gl_make_current(unsigned int window, unsigned int context);
 int host_sdl_gl_set_swap_interval(int interval);
 int host_sdl_gl_swap_window(unsigned int window);
 int host_sdl_poll_event(void *event);
+/* SDL's text input for the window (Android's keyboard while a name is typed:
+sdl_platform.c), started as the SDL_TextInputType given, one line and with no
+autocorrection, or stopped (-1); whether it runs */
+int host_sdl_text_input(unsigned int window, int type);
 int host_sdl_set_clipboard_text(const char *text);
 void host_sdl_get_clipboard_text(char *buffer, unsigned int size);
+int host_sdl_open_url(const char *url);
 /* the keyboard's keys by name (the controls' bindings, xinput_sdl.c) */
 void host_sdl_scancode_name(int scancode, char *buffer, unsigned int size);
 int host_sdl_scancode_from_name(const char *name);
@@ -115,6 +120,9 @@ void host_gl_wait_frame(unsigned int slot);
 
 /* ---------- Android */
 
+/* SoC classification for the immutable rendering policy. */
+int host_android_chip_family(void);
+
 /* the storage directories the port uses, copied into buffer */
 void host_android_path(int which, char *buffer, unsigned int size);
 
@@ -137,5 +145,37 @@ void host_touch_scene(int scene);
 /* the game control on each of the 16 controller buttons (touch_game.c),
 for the overlay's labels */
 void host_touch_bindings(const int *controls);
+/* the game's Gyro Aim for the overlay, which runs the phone's gyroscope: 0
+off, 1 on, 2 only while zoomed in */
+void host_touch_gyro_mode(int mode);
+/* the fingers that tap together to open the overlay menu (3 or 4), the
+overlay's General option */
+int host_touch_menu_fingers(void);
+/* the overlay's devices: 1, a touchscreen; 2, a game controller; 0 until it
+has looked */
+int host_touch_devices(void);
+/* a replay's buttons on the screen, for the overlay to press: count of
+them, each five ints (x0, y0, x1, y1 in ten-thousandths of the screen, and
+the game's controller button it holds down) */
+void host_touch_targets(const int *targets, int count);
+
+/* ---------- the server browser's master servers (host_https.c) */
+
+/* host_https_get's buffers' sizes and its answer, 32-bit members alone (the
+hosts' struct host_https_sizes): a call of nine arguments would put pointers
+on the stack */
+struct host_https_sizes
+{
+	int headers_size;
+	int body_capacity;
+	int error_size;
+	/* the answer: its status, and how much of the body came */
+	int status;
+	int body_size;
+};
+/* a GET of an https:// url (port/linux/src/master_list.c): 1 with the
+status, the headers ("Name: value" lines) and up to body_capacity bytes of
+the body (its size in body_size), else 0 and why in error */
+int host_https_get(const char *url, char *headers, char *body, char *error, struct host_https_sizes *sizes);
 
 #endif

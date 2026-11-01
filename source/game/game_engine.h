@@ -304,10 +304,16 @@ struct game_variant_options
 	kill takes the victim back a weapon */
 	byte gun_game_order;
 	boolean gun_game_melee_demotes;
-	/* Halo 3 Ranked Playlist & max player count (0 for non-ranked) */
+	/* port: Teamplay Options' FORCE TEAM SPAWNS: a team game other than CTF
+	spawns its players as CTF does, only at the map's CTF starting locations
+	of their own team (game_engine_get_starting_location_rating). Taken from
+	reserved, which older builds zero and ignore: the host alone picks spawns.
+	At stock OpenCE's offset (0x26), so that both builds read it the same */
+	boolean force_team_spawns;
+	/* port: Faber's Halo 3 Ranked Playlist & max player count (0 for
+	non-ranked), in bytes stock OpenCE keeps reserved */
 	byte ranked_playlist;
 	byte ranked_max_players;
-	boolean force_team_spawns;
 	byte reserved[3];
 	/* port: extended Halo: Reach Firefight gametype options */
 	unsigned long firefight_custom_skulls;

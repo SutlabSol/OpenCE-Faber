@@ -670,6 +670,8 @@
 	<widget name="main_menu/multiplayer_type_select/theater/theater_select_list" type="column_list" width="640" height="480" flags="pass_unhandled_to_focused_child up_down_tabs_children" description="main_menu/multiplayer_type_select/theater/theater_details">
 		<data input="port theater update"/>
 		<on event="created" run="port theater init"/>
+		<on event="x" run="port theater delete"/>
+		<on event="y" run="port theater record"/>
 		<child widget="main_menu/multiplayer_type_select/theater/op_theater_1" x="20" y="73"/>
 		<child widget="main_menu/multiplayer_type_select/theater/op_theater_2" x="20" y="103"/>
 		<child widget="main_menu/multiplayer_type_select/theater/op_theater_3" x="20" y="133"/>

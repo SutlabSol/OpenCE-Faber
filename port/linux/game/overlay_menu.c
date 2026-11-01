@@ -14,9 +14,8 @@ besides. A command is run at once: a line for the console
 saved as the menus save it).
 
 Holding L and R (the shoulders) and pressing the d-pad's down opens it and
-closes it, on any controller; on the keyboard | (wherever its layout has it:
-xinput_sdl.c); on Android without one, three fingers (or four, the touch
-controls' General option) on the screen together
+closes it, on any controller; on Android without one, three fingers (or
+four, the touch controls' General option) on the screen together
 (TouchControls.java over the touch controls). While
 it is open the game gets none of the controllers, the keyboard, the mouse
 or the touchscreen (port/linux/src/xinput_sdl.c, touch_input.c): the d-pad

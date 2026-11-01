@@ -218,6 +218,8 @@ static void generate_default_player_profile(
 	struct player_profile *profile);
 static void reset_local_player_profile(
 	short local_player_index);
+static void local_player_profile_settings(
+	short local_player_index);
 static void clear_profile_edit_data(
 	void);
 
@@ -255,6 +257,7 @@ static void reset_local_player_profile(
 	generate_default_player_profile(&player_ui_globals.local_players[local_player_index].profile);
 	player_ui_globals.local_players[local_player_index].active_profile_index = NONE;
 	player_ui_globals.single_player_controller[local_player_index] = NONE;
+	local_player_profile_settings(local_player_index);
 
 	return;
 }
@@ -372,6 +375,49 @@ long player_ui_get_edit_profile_index(
 	void)
 {
 	return player_ui_globals.edit_profile_index;
+}
+
+boolean player_ui_get_profile_settings_folder(
+	long profile_index,
+	char *folder,
+	unsigned long size)
+{
+	extern void platform_translate_path(char const *xbox_path, char *host_path, unsigned long host_path_size);
+	/* (as long as saved_game_files.c's MAXIMUM_FILENAME_LENGTH) */
+	char path[0x100];
+
+	if (profile_index == NONE ||
+		saved_game_file_get_type(profile_index) != _saved_game_file_type_player_profile ||
+		!saved_game_file_get_path_to_enclosing_directory(profile_index, path) ||
+		!path[0])
+	{
+		return FALSE;
+	}
+	platform_translate_path(path, folder, size);
+	return TRUE;
+}
+
+/* port: the settings the local player's profile keeps itself (its keys, its
+mouse's and its gyroscope's: port/linux/src/port_config.h), read again
+whenever the player's profile changes */
+static void local_player_profile_settings(
+	short local_player_index)
+{
+	extern void config_profile_use(int player, char const *folder);
+	char folder[1024];
+
+	if (player_ui_get_profile_settings_folder(
+		player_ui_globals.local_players[local_player_index].active_profile_index,
+		folder,
+		sizeof(folder)))
+	{
+		config_profile_use(local_player_index, folder);
+	}
+	else
+	{
+		config_profile_use(local_player_index, NULL);
+	}
+	return;
 }
 
 struct game_variant *player_ui_get_edit_playlist_profile(
@@ -1084,62 +1130,16 @@ static void hud_message_to_all(
 	return;
 }
 
-static void set_local_player_controls_from_player_profile(
-	short local_player_index)
+/* port: the buttons of the game's controls in a button preset, set in
+preferences (the menus' picture of each layout reads them too:
+menu_functions.c) */
+void player_ui_button_preset_preferences(
+	short button_preset,
+	struct game_input_preferences *result)
 {
-	struct game_input_preferences preferences = { 0 };
-	real pitch_rate_table[NUMBER_OF_LOOK_SENSITIVITY_SETTINGS] =
-	{
-		40.0f, 50.0f, 60.0f, 70.0f, 80.0f,
-		90.0f, 100.0f, 110.0f, 120.0f, 130.0f
-	};
-	real yaw_rate_table[NUMBER_OF_LOOK_SENSITIVITY_SETTINGS] =
-	{
-		80.0f, 100.0f, 120.0f, 140.0f, 160.0f,
-		180.0f, 200.0f, 220.0f, 240.0f, 260.0f
-	};
-	struct player_profile_controller_settings *controls;
-	long look_sensitivity;
-	long yaw_index;
-	short pitch_index;
-	short controller_index;
+	struct game_input_preferences preferences = *result;
 
-	match_assert(
-		"c:\\halo\\SOURCE\\interface\\player_ui.c",
-		0x396,
-		(local_player_index>=0) && (local_player_index<MAXIMUM_NUMBER_OF_LOCAL_PLAYERS));
-
-	controls = &player_ui_globals.local_players[local_player_index].profile.controller_settings;
-	look_sensitivity = controls->look_sensitivity;
-	yaw_index = look_sensitivity - 1;
-	if (look_sensitivity - 1 < 0)
-	{
-		pitch_index = 0;
-	}
-	else
-	{
-		if (yaw_index > NUMBER_OF_LOOK_SENSITIVITY_SETTINGS - 1)
-			pitch_index = NUMBER_OF_LOOK_SENSITIVITY_SETTINGS - 1;
-		else
-			pitch_index = (short)yaw_index;
-	}
-
-	if (yaw_index < 0)
-	{
-		yaw_index = 0;
-	}
-	else
-	{
-		if (yaw_index > NUMBER_OF_LOOK_SENSITIVITY_SETTINGS - 1)
-			yaw_index = NUMBER_OF_LOOK_SENSITIVITY_SETTINGS - 1;
-	}
-
-	preferences.pitch_rate = pitch_rate_table[pitch_index];
-	preferences.yaw_rate = yaw_rate_table[(short)yaw_index];
-	preferences.joystick_controls = controls->joystick_preset > _joystick_preset_legacy_south_paw ?
-		_joystick_preset_legacy_south_paw : controls->joystick_preset;
-
-	switch (controls->button_preset)
+	switch (button_preset)
 	{
 		/* port: a preset this build does not know (a later build's) gets
 		the standard buttons, not none, which moved start and back and
@@ -1327,6 +1327,67 @@ static void set_local_player_controls_from_player_profile(
 			preferences.game_control_to_xbox_buttons[11] = _gamepad_binary_button_right_thumb;
 			break;
 	}
+	*result = preferences;
+
+	return;
+}
+
+static void set_local_player_controls_from_player_profile(
+	short local_player_index)
+{
+	struct game_input_preferences preferences = { 0 };
+	real pitch_rate_table[NUMBER_OF_LOOK_SENSITIVITY_SETTINGS] =
+	{
+		40.0f, 50.0f, 60.0f, 70.0f, 80.0f,
+		90.0f, 100.0f, 110.0f, 120.0f, 130.0f
+	};
+	real yaw_rate_table[NUMBER_OF_LOOK_SENSITIVITY_SETTINGS] =
+	{
+		80.0f, 100.0f, 120.0f, 140.0f, 160.0f,
+		180.0f, 200.0f, 220.0f, 240.0f, 260.0f
+	};
+	struct player_profile_controller_settings *controls;
+	long look_sensitivity;
+	long yaw_index;
+	short pitch_index;
+	short controller_index;
+
+	match_assert(
+		"c:\\halo\\SOURCE\\interface\\player_ui.c",
+		0x396,
+		(local_player_index>=0) && (local_player_index<MAXIMUM_NUMBER_OF_LOCAL_PLAYERS));
+
+	controls = &player_ui_globals.local_players[local_player_index].profile.controller_settings;
+	look_sensitivity = controls->look_sensitivity;
+	yaw_index = look_sensitivity - 1;
+	if (look_sensitivity - 1 < 0)
+	{
+		pitch_index = 0;
+	}
+	else
+	{
+		if (yaw_index > NUMBER_OF_LOOK_SENSITIVITY_SETTINGS - 1)
+			pitch_index = NUMBER_OF_LOOK_SENSITIVITY_SETTINGS - 1;
+		else
+			pitch_index = (short)yaw_index;
+	}
+
+	if (yaw_index < 0)
+	{
+		yaw_index = 0;
+	}
+	else
+	{
+		if (yaw_index > NUMBER_OF_LOOK_SENSITIVITY_SETTINGS - 1)
+			yaw_index = NUMBER_OF_LOOK_SENSITIVITY_SETTINGS - 1;
+	}
+
+	preferences.pitch_rate = pitch_rate_table[pitch_index];
+	preferences.yaw_rate = yaw_rate_table[(short)yaw_index];
+	preferences.joystick_controls = controls->joystick_preset > _joystick_preset_legacy_south_paw ?
+		_joystick_preset_legacy_south_paw : controls->joystick_preset;
+
+	player_ui_button_preset_preferences(controls->button_preset, &preferences);
 
 	preferences.invert_look = controls->invert_look;
 	preferences.invert_look_aircraft_control = controls->flight_stick_aircraft_controls;
@@ -1365,6 +1426,7 @@ void player_ui_set_active_player_profile(
 		profile,
 		sizeof(*profile));
 	set_local_player_controls_from_player_profile(local_player_index);
+	local_player_profile_settings(local_player_index);
 	return;
 }
 
@@ -1412,6 +1474,7 @@ void player_ui_saved_game_file_removed(
 			saved_game_file_index_after_removal(
 				player_ui_globals.local_players[local_player_index].active_profile_index,
 				removed_index);
+		local_player_profile_settings(local_player_index);
 	}
 	player_ui_globals.edit_profile_index = saved_game_file_index_after_removal(
 		player_ui_globals.edit_profile_index,

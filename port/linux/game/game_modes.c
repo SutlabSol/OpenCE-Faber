@@ -636,6 +636,7 @@ void game_modes_options_sanitize(
 	{
 		options->ranked_max_players = game_modes_option(options->ranked_max_players, 2, 16, 8);
 	}
+	options->force_team_spawns = options->force_team_spawns != FALSE;
 	csmemset(options->reserved, 0, sizeof(options->reserved));
 }
 

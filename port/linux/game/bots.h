@@ -1,11 +1,12 @@
-/* bots.h: computer players for local multiplayer games (port/linux/game/bots.c)
+/* bots.h: computer players for local and system link multiplayer games (port/linux/game/bots.c)
 
-A bot is a player of a local (split screen) game whose controls come from
-code instead of a controller: it is in the lobby, the scores and the game's
+A bot is a player of a local (split screen) or system link game whose
+controls come from code on the host instead of a controller (the clients
+drive it with the input the host relays them, as they drive its players): it is in the lobby, the scores and the game's
 rules as any player is, spawns, respawns and scores. Each bot is the one
 player of a machine of its own at the top of the machine indices
-(BOTS_FIRST_MACHINE up), which no real machine takes: a split screen game has
-only its own machine. The bots have no view and no controller: nothing is
+(BOTS_FIRST_MACHINE up), which no real machine takes: the host gives the
+machines that join slots below them (network_game_server_add_new_client). The bots have no view and no controller: nothing is
 drawn for them. */
 #ifndef HALO_BOTS_H
 #define HALO_BOTS_H

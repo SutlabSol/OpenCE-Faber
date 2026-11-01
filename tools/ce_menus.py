@@ -339,7 +339,6 @@ class Art:
         self.placeholder = Image.open(placeholder).convert("RGBA")
         self.pictures = []  # (frame, size, PC picture) of the frames drawn as the placeholder
         self.xbox_frames = []  # (PC frame, Xbox bitmap, its frame) drawn from the Xbox map
-        self.added_frames = []  # (our bitmap, Xbox bitmap, its frame): port_settings.BITMAP_FRAMES
         self.svgs = []
         self.pngs = []
 
@@ -427,10 +426,6 @@ class Art:
             self.draw(relative, index, len(data), width, height, MENUS / png, self.shown.get(tag, []))
             self.pngs.append(png)
             lines.append(f"\t\t<frame{attributes([('png', png), ('width', width), ('height', height)])}/>")
-        # (the port's frames after them: the Xbox map's, scaled)
-        for source, index, width, height, x, y in port_settings.BITMAP_FRAMES.get(our_name(tag), []):
-            self.added_frames.append((our_name(tag), source, index))
-            lines.append(f"\t\t<frame{attributes([('map', source), ('index', index), ('width', width), ('height', height), ('x', x or None), ('y', y or None)])}/>")
         lines.append("\t</bitmap>")
         return "\n".join(lines)
 
@@ -588,7 +583,8 @@ def widget_xml(tag: str, widget: dict, tags: Tags, functions: list, inputs: list
         name = patch.get("swap", {}).get(our_name(child_tag), our_name(child_tag))
         lines += [f"{inner}{line}" for line in patch.get("insert_before", {}).get(our_name(child_tag), [])]
         pairs = [("widget", name), ("x", x or None), ("y", y or None),
-                 ("controller", str(child["custom controller index"] + 1) if child["flags"] & 1 else None)]
+                 ("controller", str(child["custom controller index"] + 1) if child["flags"] & 1 else None),
+                 ("platform", patch.get("child_platforms", {}).get(name))]
         lines.append(f"{inner}<child{attributes(pairs)}/>")
     lines += [f"{inner}{line}" for line in patch.get("children", [])]
     lines.append(f"{indent}</widget>")
@@ -702,6 +698,13 @@ def main() -> None:
     lines.append(art.port_picture("mods/status", port_settings.mod_status_frames(ROOT / "port/assets/icons/lucide")))
     lines.append(art.port_picture("mods/status_small",
                                   port_settings.mod_status_frames(ROOT / "port/assets/icons/lucide", 16)))
+    # (the button-layout overlay's controllers, AL2009man's Gamepad Asset
+    # Pack's, beside the pictures that draw them: port_settings.CONTROLLERS)
+    (MENUS / "port_svg/controllers").mkdir(parents=True, exist_ok=True)
+    for controller in port_settings.CONTROLLERS:
+        shutil.copy2(MENUS / "controllers" / f"{controller}.svg", MENUS / "port_svg/controllers" / f"{controller}.svg")
+    lines += [art.port_picture(name, frames) for name, frames in port_settings.layout_overlay_pictures()]
+    lines += [art.port_picture(name, frames) for name, frames in port_settings.browser_hint_pictures()]
     # (nothing: what a game map draws for a frame of ui.map's it has not,
     # menu_tags.c)
     lines.append(art.port_picture("blank", [
@@ -761,15 +764,6 @@ def main() -> None:
         "| --- | --- |",
     ]
     report += [f"| `{name}.png` | `{tag}` frame {index} |" for name, tag, index in sorted(art.xbox_frames)]
-    report += [
-        "",
-        "These frames are added after a bitmap's, drawn scaled from the Xbox map's (the profile settings'",
-        "picture of Gamepad Setup: the Xbox's Controller Setup's pictures of the button settings).",
-        "",
-        "| Our bitmap | The Xbox's frame |",
-        "| --- | --- |",
-    ]
-    report += [f"| `{name}` | `{tag}` frame {index} |" for name, tag, index in art.added_frames]
     report += [
         "",
         "## Placeholders, to be redrawn",

@@ -168,6 +168,13 @@ enum
 	the hash and size of the host's share (or none), to each client, reliably,
 	in the lobby too, when it changes and every ten seconds */
 	_distributed_message_tag_share = 163,
+	/* a dedicated server's vote for the next game (network_map_vote.c), in
+	the lobby too, reliably: the host's choices and their votes, to every
+	client, once a second and as they change, and the one that won; a
+	client's choice, to the host, which takes it only from the machine's own
+	stream */
+	_distributed_message_map_vote = 94,
+	_distributed_message_map_vote_choice = 95,
 
 	NUMBER_OF_DISTRIBUTED_MESSAGES
 };
@@ -302,6 +309,13 @@ void network_distributed_own_actions(byte const *data, long size);
 /* (a replay's playback) the player (an absolute index) whose input such a
 record is, NONE if it cannot be read */
 short network_distributed_own_actions_player(byte const *data, long size);
+/* (a replay's playback) the players' facings a record holds, each found
+(its player, an absolute index; the tick it is of, the host's or for a
+client's own input its own; and its yaw and pitch as the wire has them,
+distributed_angle_unpack's): the relayed actions in a message the client
+read of its host (one in a batch too), or a client's own input's record */
+void network_distributed_replay_facings(byte const *data, long size, boolean own_actions,
+	void (*found)(void *context, short player_index, long tick, short yaw, short pitch), void *context);
 /* (a replay's playback) a keyframe put back: the times kept by this
 machine's clock (the host's last message's) are now's again, not the
 keyframe's */
@@ -377,10 +391,16 @@ void distributed_send_notice_to_machine(long machine_index, char const *text);
 (seconds since 1970; 0: for ever), written in its bans.txt line */
 void network_distributed_ban_details(char const *reason, unsigned long until);
 /* (the host: a dedicated server's sv_ban_address) a ban's line in bans.txt
-for an address (its text; "none" for none) and a hardware id (empty for
-none), as the ban command writes one: TRUE if it was written */
-boolean network_distributed_ban_record(char const *address, char const *hardware_id, char const *names,
-	char const *reason, unsigned long until);
+for an address (its text; "none" for none), a hardware id and a verified
+Discord account's id (each empty for none), as the ban command writes one:
+TRUE if it was written */
+boolean network_distributed_ban_record(char const *address, char const *hardware_id, char const *discord_id,
+	char const *names, char const *reason, unsigned long until);
+/* (the host) a client machine's Discord account, its id and username: a
+verified one's (a pass that checked, network_link.c), else the one it told
+(empty for none); TRUE if it is verified */
+boolean network_distributed_machine_discord(long machine_index, char *discord_id, long discord_id_size,
+	char *discord_name, long discord_name_size);
 /* whether the next ban drops its machine and keeps it out without its line
 in bans.txt (network_distributed_ban_record wrote it) */
 void network_distributed_ban_unrecorded(boolean unrecorded);

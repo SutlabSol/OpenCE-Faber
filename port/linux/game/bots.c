@@ -33,8 +33,10 @@ What a bot does each tick, in a player's terms:
   a grenade now and then at middle range and strikes with its weapon close
   up. It strafes while fighting, jumps now and then, and keeps its distance.
   By its skill it aims at the head with a weapon whose headshots count (the
-  pistol and the sniper rifle at an unshielded target; every weapon in
-  SWAT), and at the feet with one whose blast hurts (rockets, the fuel rod).
+  pistol and the sniper rifle at an unshielded target, always from normal;
+  every weapon in SWAT), and at the feet with one whose blast hurts
+  (rockets, the fuel rod). How it reacts, aims, fires, strikes, throws and
+  moves in a fight is its level's (below: "Fighting by level").
 - Where it goes, in turn: a flag it carries, home; a vehicle it goes for; a
   health pack when hurt, an overshield or camouflage near; capture the
   flag's urgent goals (its own flag carried off or dropped); a vantage point
@@ -162,25 +164,27 @@ What a bot does each tick, in a player's terms:
 Skill (bots.skill): recruit, easy, normal, heroic, veteran, legendary - how
 soon it reacts, how far and how wide it sees, how large its aim error is and
 how fast that settles, how fast it turns, how tight its shots must be before
-it fires, its bursts and its grenades. easy, normal, heroic and legendary
-are the levels the bots always had; recruit (for new players) is below
-easy, and veteran is halfway from heroic to legendary. distributed (the
-default) gives each bot a level of its own, on a curve of them
-(bots_combat_distributed_skill). How often it goes for the head and the
-feet, and how hurt it is before it goes for a health pack, are by level too.
+it fires, its bursts and its grenades, how often it goes for the head and
+the feet, how hurt it is before it goes for a health pack. easy, normal,
+heroic and legendary are the levels the bots always had; recruit (for new
+players) is below easy, and veteran is halfway from heroic to legendary.
+distributed (the default) gives each bot a level of its own, on a curve of
+them (bots_combat_distributed_skill).
 
 Fighting by level: a bot fights as a player of its level does, by
-bots_combat.c's rules - a reaction and a look that are
-never the same twice, an aim that trails the target at the lowest levels
-and keeps an error at range, headshots once the shields are down, the
-pistol paced at range and the sniper rifle zoomed (again, after a hit),
-blows and grenades by level (a throw that leads the target's path, one at
-the spot it was last seen), strafes and halts of the level's rhythm (short
-jiggles at the top), jumps and crouches, a step in for a blow, a run in to
-finish a won fight, a retreat along a path when losing (as its shields pop,
-at the top), no sight of players far above or below where it looks, and
-high ground when it roams. halo.log's minute line is followed by the
-fight's counts.
+bots_combat.c's rules (OpenCE's, from Halo CE: Arena Evolved's bots) - a
+reaction and a look that are never the same twice, an aim that trails the
+target at the lowest levels and keeps an error at range, headshots once the
+shields are down, the pistol paced at range and the sniper rifle zoomed (again,
+after a hit), blows and grenades by level (a throw that leads the target's
+path, one at the spot it was last seen), strafes and halts of the level's
+rhythm (short jiggles at the top), jumps and crouches, a step in for a blow,
+a run in to finish a won fight, a retreat along a path when losing (as its
+shields pop, at the top), no sight of players far above or below where it
+looks, and high ground when it roams. A zombie keeps Infection's own fight,
+and a bot on the hill, carrying the flag or the ball, or holding a vantage
+point neither retreats nor runs in. halo.log's minute line is followed by
+the fight's counts.
 
 The simulation: a bot decides from the game state at the tick and its own
 random numbers (seeded per bot and game), and its path searches run in the
@@ -527,7 +531,7 @@ bots_combat_jump_delay's); recruit is below easy, and veteran halfway from
 heroic to legendary in every number */
 static struct bots_skill_definition const bots_skills[NUMBER_OF_BOTS_SKILLS] =
 {
-	{ "recruit", 1.4f, 16.0f, 80.0f, 22.0f, 2.5f, 5.0f, 2.6f, 0.0f, 0.0f, 4, 24, 0.0f, 0.0f, 0.25f, 0.00f, 10.0f },
+	{ "recruit", 1.4f, 16.0f, 80.0f, 22.0f, 2.5f, 5.0f, 2.6f, 0.0f, 0.0f, 4, 24, 0.05f, 0.0f, 0.25f, 0.00f, 10.0f },
 	{ "easy", 0.75f, 22.0f, 100.0f, 12.0f, 1.4f, 8.0f, 2.2f, 0.3f, 0.04f, 6, 14, 0.15f, 0.0f, 0.35f, 0.00f, 15.0f },
 	{ "normal", 0.45f, 32.0f, 120.0f, 7.0f, 0.9f, 13.0f, 1.8f, 0.7f, 0.10f, 9, 9, 0.4f, 0.4f, 0.50f, 0.25f, 25.0f },
 	{ "heroic", 0.30f, 42.0f, 140.0f, 4.0f, 0.6f, 20.0f, 1.5f, 0.8f, 0.16f, 12, 6, 0.7f, 0.8f, 0.65f, 0.35f, 30.0f },
@@ -538,7 +542,8 @@ static struct bots_skill_definition const bots_skills[NUMBER_OF_BOTS_SKILLS] =
 /* the ticks of its target's places a bot keeps (the aim that trails it) */
 #define BOTS_TRACK_TICKS 16
 
-/* a bot's fight by level, started over at each spawn */
+/* a bot's fight by level (bots_combat.c's rules), started over at each
+spawn */
 struct bots_bot_combat
 {
 	struct bots_combat_retreat retreat;
@@ -752,8 +757,6 @@ struct bots_bot
 	/* the buttons held last tick (a press is a tick held, then released) */
 	unsigned long previous_control_flags;
 
-	struct bots_bot_combat combat;
-
 	/* its path search (a slot of bots_globals.searches), NONE for none */
 	long search_slot;
 
@@ -836,6 +839,8 @@ struct bots_bot
 	real_point3d hill_point;
 	long hill_until_tick;
 	long hill_id;
+	/* its fight by level (bots_combat.c's rules) */
+	struct bots_bot_combat combat;
 };
 
 /* ---------- globals */
@@ -1158,9 +1163,14 @@ short bots_skill(void)
 		if (!strcmp(name, bots_skills[skill].name))
 			return skill;
 	}
-	/* (a number, 0 to 3) */
+	/* (a number, 0 to 3: the four levels the bots first had, easy to
+	legendary) */
 	if (name[0] >= '0' && name[0] <= '3' && !name[1])
-		return (short)(name[0] - '0');
+	{
+		static short const numbered[] = { _bots_skill_easy, _bots_skill_normal, _bots_skill_heroic, _bots_skill_legendary };
+
+		return numbered[name[0] - '0'];
+	}
 	return _bots_skill_normal;
 }
 
@@ -1707,29 +1717,6 @@ static real bots_weapon_range_compute(long definition_index)
 	return 7.0f;
 }
 
-/* how a weapon definition aims (the fight by level): whether it kills with
-a shot to the head (the pistol, the sniper rifle), whether its shots are
-true only zoomed (the sniper rifle: its trigger's error when unzoomed), and
-whether its error grows as it fires (the pistol) */
-static void bots_weapon_level_compute(long definition_index, boolean *headshots, boolean *sniper, boolean *blooms)
-{
-	struct weapon_definition *definition = weapon_definition_get(definition_index);
-	char const *name = tag_get_name(definition_index);
-
-	*headshots = name && ((strstr(name, "pistol") && !strstr(name, "plasma")) || strstr(name, "sniper"));
-	*sniper = FALSE;
-	*blooms = FALSE;
-	if (definition->weapon.triggers.count > 0)
-	{
-		struct weapon_trigger_definition *trigger =
-			TAG_BLOCK_GET_ELEMENT(&definition->weapon.triggers, 0, struct weapon_trigger_definition);
-
-		*sniper = TEST_FLAG(trigger->flags, _weapon_trigger_use_error_when_unzoomed_bit) &&
-			definition->weapon.zoom_level_count > 0;
-		*blooms = trigger->projectile_error_angle_upper_bound > trigger->projectile_error_angle_lower_bound + 0.001f;
-	}
-}
-
 /* port: what kind of a precision weapon it is, from its tag alone (not its
 name: a Custom Edition map's own rifles too), bots_tactics.h's
 _bots_precision_...: it zooms, its first trigger fires one projectile a
@@ -1805,14 +1792,16 @@ struct bots_weapon_kind
 	short tap_ticks;
 	real range;
 	real projectile_speed;
-	boolean headshots;
-	boolean sniper;
-	boolean blooms;
 	/* port: the ticks its trigger charges (a turret's gun that fires only
 	charged, Extinction's gun tower's), 0 for none */
 	short charge_ticks;
 	/* port: what kind of a precision weapon (bots_tactics.h) */
 	short precision;
+	/* (the fight by level) its shots are true only zoomed (the sniper rifle:
+	its trigger's error when unzoomed), and its error grows as it fires (the
+	pistol) */
+	boolean sniper;
+	boolean blooms;
 };
 
 static struct
@@ -1863,7 +1852,6 @@ static struct bots_weapon_kind const *bots_weapon_kind(long definition_index)
 	kind->tap_ticks = bots_weapon_tap_ticks_compute(definition_index);
 	kind->range = bots_weapon_range_compute(definition_index);
 	kind->projectile_speed = bots_projectile_speed_compute(definition_index);
-	bots_weapon_level_compute(definition_index, &kind->headshots, &kind->sniper, &kind->blooms);
 	kind->precision = bots_weapon_precision_compute(definition_index);
 	kind->aim = bots_weapon_aim_compute(definition_index);
 	if (kind->precision != _bots_precision_none && kind != &bots_weapon_kinds.spare)
@@ -1871,14 +1859,20 @@ static struct bots_weapon_kind const *bots_weapon_kind(long definition_index)
 			"precision, long (a vantage point)" : kind->precision == _bots_precision_mid ? "precision, middle range" :
 			"heavy (a vantage point)");
 	kind->charge_ticks = 0;
+	kind->sniper = FALSE;
+	kind->blooms = FALSE;
 	{
 		struct weapon_definition *definition = weapon_definition_get(definition_index);
 
 		if (definition->weapon.triggers.count > 0)
 		{
-			real charging = TAG_BLOCK_GET_ELEMENT(&definition->weapon.triggers, 0, struct weapon_trigger_definition)->charging_time;
+			struct weapon_trigger_definition *trigger =
+				TAG_BLOCK_GET_ELEMENT(&definition->weapon.triggers, 0, struct weapon_trigger_definition);
 
-			kind->charge_ticks = (short)PIN((long)(charging * TICKS_PER_SECOND + 0.5f), 0, TICKS_PER_SECOND * 5);
+			kind->charge_ticks = (short)PIN((long)(trigger->charging_time * TICKS_PER_SECOND + 0.5f), 0, TICKS_PER_SECOND * 5);
+			kind->sniper = TEST_FLAG(trigger->flags, _weapon_trigger_use_error_when_unzoomed_bit) &&
+				definition->weapon.zoom_level_count > 0;
+			kind->blooms = trigger->projectile_error_angle_upper_bound > trigger->projectile_error_angle_lower_bound + 0.001f;
 		}
 	}
 	return kind;
@@ -3071,6 +3065,7 @@ void bots_initialize_for_new_map(void)
 	bots_globals.stuck_tall = 0;
 	bots_globals.stuck_clear = 0;
 	bots_globals.stuck_giveups = 0;
+	csmemset(bots_globals.combat_counts, 0, sizeof(bots_globals.combat_counts));
 	bots_globals.climbable_surfaces = 0;
 	bots_globals.ladder_count = 0;
 	bots_globals.ladder_climbs = 0;
@@ -4534,8 +4529,8 @@ static void bots_set_goal(struct bots_bot *bot, short kind, real_point3d const *
 }
 
 /* a roaming place picked at random (index), or a higher one (VETERAN and
-up): two more places at random, not within 6 units,
-and the one of the most credit for its height above the bot */
+up): two more places at random, not within 6 units, and the one of the most
+credit for its height above the bot */
 static short bots_roam_higher(struct bots_bot *bot, real_point3d const *position, short index)
 {
 	short best = index, tries;
@@ -4564,7 +4559,8 @@ static short bots_roam_higher(struct bots_bot *bot, real_point3d const *position
 
 /* the next place to roam to: most often towards an enemy (the roaming place
 nearest a living enemy, as a player knows where the other team's base is
-and reads the motion tracker), else anywhere */
+and reads the motion tracker; by level: bots_combat_hunt_chance), else
+anywhere (a higher place from veteran) */
 static void bots_pick_roam_goal(struct bots_bot *bot, real_point3d const *position)
 {
 	long tries;
@@ -5975,24 +5971,30 @@ static void bots_level_trail(struct bots_bot *bot, long now, real_point3d *aim_p
 		*aim_point = combat->track[slot].point;
 }
 
-/* the aim point: the head of a target whose shields are down, with a weapon
-that kills with a shot to it (NORMAL and up); with a grenade in the hand,
-ahead of the target by its flight (HEROIC and up), at most 3.5 units */
-static void bots_level_aim_point(struct bots_bot *bot, struct bots_tick *tick, long target_unit_index,
+/* whether it aims at its target's head: always with a weapon whose
+headshots count at a target whose shields are down (NORMAL and up), else by
+its skill's chance taken now and then (the lower levels; any weapon in SWAT,
+where a shot to the head kills) */
+static boolean bots_level_aim_head(struct bots_bot *bot, struct object_datum *target, short aim, boolean swat)
+{
+	struct bots_bot_combat *combat = &bot->combat;
+	boolean precision = aim == _bots_aim_precision;
+	boolean head = bots_combat_aim_head(bots_globals.skill, target->object.shield_vitality, precision) ||
+		(bot->aim_head && (swat || (precision && target->object.shield_vitality <= 0.0f)));
+
+	if (head && !combat->head_aim)
+		bots_globals.combat_counts[_bots_combat_count_head_aims]++;
+	combat->head_aim = head;
+	return head;
+}
+
+/* with a grenade in the hand, the aim ahead of the target by its flight
+(HEROIC and up), at most 3.5 units */
+static void bots_level_aim_point(struct bots_bot *bot, struct bots_tick *tick, struct object_datum *target,
 	real_point3d *aim_point)
 {
 	struct bots_bot_combat *combat = &bot->combat;
-	struct object_datum *target = object_get(target_unit_index);
-	boolean head = tick->weapon_index != NONE && bots_combat_aim_head(bots_globals.skill,
-		target->object.shield_vitality, bots_weapon_kind(weapon_get(tick->weapon_index)->definition_index)->headshots);
 
-	if (head)
-	{
-		unit_get_head_position(target_unit_index, aim_point);
-		if (!combat->head_aim)
-			bots_globals.combat_counts[_bots_combat_count_head_aims]++;
-	}
-	combat->head_aim = head;
 	if (tick->now < combat->throw_until_tick && combat->throw_lead > 0.0f)
 	{
 		struct unit_definition *definition = unit_definition_get(tick->object->definition_index);
@@ -6073,7 +6075,7 @@ static boolean bots_level_may_fire(struct bots_bot *bot, struct bots_tick *tick)
 			tick->action->desired_zoom_level = 0;
 		return TRUE;
 	}
-	if (kind->headshots && kind->blooms &&
+	if (kind->aim == _bots_aim_precision && kind->blooms &&
 		bots_combat_pace_holds(skill, tick->target_distance, weapon_get(tick->weapon_index)->weapon.triggers[0].error,
 			combat->pace_since_tick == NONE ? 0 : tick->now - combat->pace_since_tick))
 	{
@@ -6110,11 +6112,12 @@ static boolean bots_unit_back_turned(long unit_index, real_point3d const *point)
 /* whether the bot strikes now: within the level's reach it waits the
 level's moment first; a blow it chose not to strike is asked again a second
 later */
-static boolean bots_level_melee(struct bots_bot *bot, struct bots_tick *tick, long target_unit_index)
+static boolean bots_level_melee(struct bots_bot *bot, struct bots_tick *tick, struct object_datum *target,
+	long target_unit_index)
 {
 	struct bots_bot_combat *combat = &bot->combat;
 	int choice = bots_combat_melee(bots_globals.skill, tick->target_distance, tick->now >= bot->melee_tick,
-		bots_unit_back_turned(target_unit_index, &tick->position), object_get(target_unit_index)->object.shield_vitality,
+		bots_unit_back_turned(target_unit_index, &tick->position), target->object.shield_vitality,
 		combat->charging, bots_random_real(bot));
 
 	if (choice == 0)
@@ -6203,8 +6206,11 @@ static boolean bots_level_retreat_goal(struct bots_bot *bot, struct bots_tick *t
 its weapon's distance, at a fight's start and now and then at a new strafe),
 a retreat along a path when losing (still shooting; not back to where the
 enemy was), a run in to finish a won fight, a step in for a blow, jumps at
-the level's rhythm */
-static void bots_level_move(struct bots_bot *bot, struct bots_tick *tick, struct object_datum *target)
+the level's rhythm. A bot that holds its place (on the hill, carrying the
+flag or the ball, at a vantage point) neither halts, retreats, runs in nor
+steps in; nor does one backing from a zombie (Infection) close in */
+static void bots_level_move(struct bots_bot *bot, struct bots_tick *tick, struct object_datum *target, boolean holding,
+	boolean keep_off)
 {
 	struct bots_bot_combat *combat = &bot->combat;
 	short skill = bots_globals.skill;
@@ -6218,10 +6224,21 @@ static void bots_level_move(struct bots_bot *bot, struct bots_tick *tick, struct
 		tick->weapon_index != NONE ? bots_weapon_loaded(tick->weapon_index) : 1.0f,
 		tick->object->object.bounding_sphere_center.z - target_point->z);
 	boolean new_fight = now - combat->last_fight_tick > TICKS_PER_SECOND * 2 || now < combat->last_fight_tick;
-	int started, ended;
-	boolean retreating = bots_combat_retreat_step(&combat->retreat, skill, confidence, own_shield, now,
-		bots_combat_hash01((unsigned long)bot->player_index, (unsigned long)combat->retreat.next_allowed), &started, &ended);
+	int started = FALSE, ended = FALSE;
+	boolean retreating = FALSE;
 
+	if (!holding)
+	{
+		retreating = (boolean)bots_combat_retreat_step(&combat->retreat, skill, confidence, own_shield, now,
+			bots_combat_hash01((unsigned long)bot->player_index, (unsigned long)combat->retreat.next_allowed), &started,
+			&ended);
+	}
+	else if (combat->retreat.active)
+	{
+		/* (its place comes first: a retreat is given up) */
+		bots_combat_retreat_reset(&combat->retreat);
+		ended = TRUE;
+	}
 	if (new_fight)
 	{
 		combat->halt_until_tick = bot->target_first_seen_tick + bots_combat_initial_halt_ticks(skill,
@@ -6241,7 +6258,7 @@ static void bots_level_move(struct bots_bot *bot, struct bots_tick *tick, struct
 		}
 	}
 	combat->last_fight_tick = now;
-	if (now < combat->halt_until_tick)
+	if (now < combat->halt_until_tick && !holding && !keep_off)
 	{
 		real range = bots_weapon_range(tick->weapon_index);
 
@@ -6257,7 +6274,7 @@ static void bots_level_move(struct bots_bot *bot, struct bots_tick *tick, struct
 		bots_level_retreat_goal(bot, tick, target_point);
 		bots_globals.combat_counts[_bots_combat_count_retreats]++;
 	}
-	if (ended)
+	if (ended && bot->goal_kind == _bots_goal_roam)
 		bot->goal_kind = _bots_goal_none;
 	if (retreating)
 	{
@@ -6276,9 +6293,9 @@ static void bots_level_move(struct bots_bot *bot, struct bots_tick *tick, struct
 		tick->throttle_scale = 1.0f;
 		combat->charging = FALSE;
 	}
-	else
+	else if (!holding && !keep_off)
 	{
-		boolean charge = bots_combat_charge(skill, confidence, target_shield, target->object.body_vitality,
+		boolean charge = (boolean)bots_combat_charge(skill, confidence, target_shield, target->object.body_vitality,
 			tick->target_distance);
 
 		if (charge)
@@ -6297,6 +6314,8 @@ static void bots_level_move(struct bots_bot *bot, struct bots_tick *tick, struct
 		}
 		combat->charging = charge;
 	}
+	else
+		combat->charging = FALSE;
 	if (combat->next_jump_tick > 0 && now >= combat->next_jump_tick)
 	{
 		long delay = bots_combat_jump_delay(skill, bots_random_real(bot));
@@ -6346,7 +6365,7 @@ static void bots_level_prenade(struct bots_bot *bot, struct bots_tick *tick)
 	target_unit_index = bots_target_unit(bot);
 	if (skill < _bots_skill_veteran || target_unit_index == NONE || bot->target_last_surface_index == NONE ||
 		combat->prenade_seen_tick == bot->target_seen_tick || !has || tick->now < bot->grenade_tick ||
-		tick->object->object.parent_object_index != NONE)
+		tick->object->object.parent_object_index != NONE || bots_zombie(tick->player))
 	{
 		return;
 	}
@@ -6419,7 +6438,8 @@ static void bots_bot_look(struct bots_bot *bot, struct bots_tick *tick)
 }
 
 /* fighting the target seen in the last half second: aim (turning at its
-speed, leading, an error that settles), fire, a grenade, a blow, strafing */
+speed, leading, an error that settles), fire, a grenade, a blow, strafing;
+each by its level (bots_combat.c's rules) */
 static void bots_bot_fight(struct bots_bot *bot, struct bots_tick *tick)
 {
 	struct bots_skill_definition const *skill = tick->skill;
@@ -6438,18 +6458,18 @@ static void bots_bot_fight(struct bots_bot *bot, struct bots_tick *tick)
 	aim_point = target_object->object.bounding_sphere_center;
 	tick->fighting = TRUE;
 	/* (a reaction of 0.85 to 1.35 of the level's, another each sighting; the
-	aim trailing the target at the lowest levels, at the head or ahead of a
-	throw) */
+	aim trailing the target at the lowest levels) */
 	reaction_ticks = bots_combat_reaction_ticks(bots_globals.skill, reaction_ticks,
 		bots_combat_hash01((unsigned long)bot->player_index, (unsigned long)bot->target_first_seen_tick));
 	bots_level_trail(bot, now, &aim_point);
-	bots_level_aim_point(bot, tick, target_unit_index, &aim_point);
 	bots_tick_eye(tick);
-	/* where on the target: the head with a weapon whose headshots count (any
-	in SWAT, where a shot to the head kills; the pistol and the sniper rifle
-	once its shields are down), the ground at its feet with one whose blast
-	hurts (when it stands no higher than the bot's eyes), each by the skill's
-	chance, taken once a target and again every couple of seconds */
+	/* where on the target: the head with a weapon whose headshots count (the
+	pistol and the sniper rifle once its shields are down: always from
+	normal, by the skill's chance below it; any weapon in SWAT, where a shot
+	to the head kills, by the chance), the ground at its feet with one whose
+	blast hurts (when it stands no higher than the bot's eyes), by the
+	skill's chance; the chances taken once a target and again every couple
+	of seconds */
 	{
 		short aim = tick->weapon_index != NONE ?
 			bots_weapon_kind(weapon_get(tick->weapon_index)->definition_index)->aim : _bots_aim_body;
@@ -6462,7 +6482,7 @@ static void bots_bot_fight(struct bots_bot *bot, struct bots_tick *tick)
 			bot->aim_head = bots_random_real(bot) < skill->headshot_chance;
 			bot->aim_feet = bots_random_real(bot) < skill->feet_chance;
 		}
-		if (bot->aim_head && (swat || (aim == _bots_aim_precision && target_object->object.shield_vitality <= 0.0f)))
+		if (bots_level_aim_head(bot, target_object, aim, swat))
 		{
 			unit_get_head_position(target_unit_index, &aim_point);
 		}
@@ -6478,6 +6498,8 @@ static void bots_bot_fight(struct bots_bot *bot, struct bots_tick *tick)
 			}
 		}
 	}
+	/* (ahead of a throw, from heroic) */
+	bots_level_aim_point(bot, tick, target_object, &aim_point);
 	tick->target_distance = bots_distance3d(&tick->eye, &aim_point);
 	/* (leading a moving target by the projectile's flight) */
 	if (tick->weapon_index != NONE && skill->lead > 0.0f)
@@ -6517,7 +6539,8 @@ static void bots_bot_fight(struct bots_bot *bot, struct bots_tick *tick)
 	yaw_off = (real)fabs(bots_angle_difference((real)atan2(dy, dx), bot->yaw));
 	pitch_off = (real)fabs((real)atan2(dz, horizontal) - bot->pitch);
 	cone = (real)atan(0.35f / MAX(tick->target_distance, 0.5f)) * skill->fire_cone + 0.01f;
-	if (!bots_level_may_fire(bot, tick))
+	/* (the sniper rifle zoomed, the pistol paced) */
+	if (!zombie && !bots_level_may_fire(bot, tick))
 		cone = -1.0f;
 	if (!zombie && now - bot->target_first_seen_tick >= reaction_ticks && now - bot->target_seen_tick <= 3 &&
 		yaw_off < cone && pitch_off < cone * 1.5f && tick->weapon_index != NONE)
@@ -6544,24 +6567,29 @@ static void bots_bot_fight(struct bots_bot *bot, struct bots_tick *tick)
 			tick->flags |= FLAG(_unit_control_weapon_primary_trigger_bit);
 		}
 	}
-	/* a blow close up: a zombie's (its skull's) a little further and more
-	often, its only one; else the level's reach, its moment and its wait */
-	if (zombie ? tick->target_distance < 1.6f && now >= bot->melee_tick :
-		bots_level_melee(bot, tick, target_unit_index))
+	/* a blow close up: a zombie's, its skull's, a little further and more
+	often (its only one); else the level's reach, its moment and its wait */
+	if (zombie)
+	{
+		if (tick->target_distance < 1.6f && now >= bot->melee_tick)
+		{
+			tick->flags |= FLAG(_unit_control_use_equipment_bit);
+			bot->melee_tick = now + TICKS_PER_SECOND / 2;
+		}
+	}
+	else if (bots_level_melee(bot, tick, target_object, target_unit_index))
 	{
 		tick->flags |= FLAG(_unit_control_use_equipment_bit);
-		bot->melee_tick = now + (zombie ? TICKS_PER_SECOND / 2 :
-			bots_combat_melee_cooldown(bots_globals.skill, bots_random_real(bot)));
+		bot->melee_tick = now + bots_combat_melee_cooldown(bots_globals.skill, bots_random_real(bot));
 	}
-	/* a grenade at middle range, by the level's rules (none from a zombie) */
+	/* a grenade at middle range, by the level's rules */
 	if (!zombie)
 		bots_level_grenade(bot, tick, reaction_ticks);
-	/* strafing, to a side for a while; nearer or further to keep its
-	weapon's distance; a jump now and then */
+	/* strafing, to a side for a while (the level's strafes, short jiggles at
+	the top); nearer or further to keep its weapon's distance */
 	if (now >= bot->strafe_until_tick)
 	{
 		bot->strafe_sign = bots_random_real(bot) < 0.5f ? -1.0f : 1.0f;
-		/* (the level's strafes, short jiggles at the top) */
 		bot->strafe_until_tick = now + bots_combat_strafe_ticks(bots_globals.skill, bots_random_real(bot));
 	}
 	{
@@ -6604,16 +6632,21 @@ static void bots_bot_fight(struct bots_bot *bot, struct bots_tick *tick)
 			}
 		}
 	}
-	/* crouches, halts, a retreat, a charge, a step in, jumps, by level (not a
-	zombie's, which runs straight at them) */
-	if (zombie)
-		return;
-	if (bots_combat_crouch_chance(bots_globals.skill) > 0.0f &&
-		bots_combat_crouch_step(&bot->combat.crouch, bots_globals.skill, now, bots_random_real(bot)))
+	/* crouches, halts, a retreat, a charge, a step in, jumps, by level (on
+	foot: a rider's vehicle moves it; not a zombie's: Infection's own fight) */
+	if (!zombie && tick->object->object.parent_object_index == NONE)
 	{
-		tick->flags |= FLAG(_unit_control_crouch_modifier_bit);
+		boolean on_hill = bots_king_active() && bots_king_on_hill(tick->player->unit_index);
+		boolean holding = on_hill || bot->held_objective || bots_tactics_holding((long)(bot - bots_globals.bots));
+		boolean keep_off = infection_enabled() && infection_unit_is_zombie(target_unit_index);
+
+		if (bots_combat_crouch_chance(bots_globals.skill) > 0.0f &&
+			bots_combat_crouch_step(&bot->combat.crouch, bots_globals.skill, now, bots_random_real(bot)))
+		{
+			tick->flags |= FLAG(_unit_control_crouch_modifier_bit);
+		}
+		bots_level_move(bot, tick, target_object, holding, keep_off);
 	}
-	bots_level_move(bot, tick, target_object);
 }
 
 /* walking to the goal, looking where it goes; there, a look about (and the
@@ -8038,6 +8071,7 @@ static void bots_bot_update(struct bots_bot *bot, long bot_index, struct player_
 		bot->last_body_vitality = tick.object->object.body_vitality;
 		bot->item_powerup = _bots_powerup_none;
 		bot->powerup_index = NONE;
+		/* (its fight by level, started over) */
 		bots_level_reset(&bot->combat);
 	}
 	/* port: riding, it is where its vehicle is (a rider's own position is
@@ -8165,8 +8199,9 @@ static void bots_bot_update(struct bots_bot *bot, long bot_index, struct player_
 		{
 			bots_bot_walk(bot, &tick);
 			bots_bot_yield(bot, bot_index, &tick);
-			/* (a grenade where its target was last seen, by level) */
-			if (!carrying && !bots_zombie(tick.player))
+			/* (a grenade where the target was last seen, from veteran; not
+			while carrying a flag home) */
+			if (!tick.fighting && !carrying)
 				bots_level_prenade(bot, &tick);
 		}
 		else if (bot->goal_kind == _bots_goal_item || bot->goal_kind == _bots_goal_vehicle)

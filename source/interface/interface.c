@@ -110,6 +110,8 @@ symbols in this file:
 #include "campaign_score.h" /* port: port/linux/game/campaign_score.c */
 #include "network_replay.h" /* port: port/linux/game/network_replay_playback.c */
 #include "firing_range.h" /* port: port/linux/game/firing_range.c */
+#include "stats_log.h" /* port: port/linux/game/stats_log.c */
+#include "frame_rate_display.h" /* port: port/linux/game/frame_rate_display.c */
 
 /* ---------- constants */
 
@@ -403,6 +405,11 @@ void interface_draw_fullscreen_overlays(
 	network_replay_playback_draw();
 	/* port: the firing range's C-Uplink terminal popups and Gun Range telemetry HUD */
 	firing_range_draw();
+	/* port: display.stats_log, a line a second in the log (stats_log.c) */
+	stats_log_tick();
+	/* port: the frame rate counter as display.show_fps says
+	(port/linux/game/frame_rate_display.c) */
+	frame_rate_display_update();
 	terminal_draw();
 	main_framerate_render();
 	render_debug_profile();

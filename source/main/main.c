@@ -383,6 +383,7 @@ symbols in this file:
 #include "network_coop.h" /* port: port/linux/game/network_coop.c */
 #include "bots.h" /* port: port/linux/game/bots.c */
 #include "campaign_score.h" /* port: port/linux/game/campaign_score.c */
+#include "coop_scripts.h" /* port: port/linux/game/coop_scripts.c */
 #include "network_voice.h" /* port: port/linux/game/network_voice.c */
 #include "network_chat.h" /* port: port/linux/game/network_chat.c */
 #include "network_aim_assist.h" /* port: port/linux/game/network_aim_assist.c */
@@ -2062,10 +2063,23 @@ on the host alone. */
 static boolean main_coop_host_revert(
 	void)
 {
+	/* (the last reverts' times: a script whose failure holds again at once
+	after the revert would pull everyone back to the save over and over; a
+	third in a minute respawns the players at the checkpoint instead) */
+	static unsigned long revert_times[2];
+	unsigned long milliseconds = system_milliseconds();
 	long now = game_time_get();
 
 	if (!game_state_port_saved_game_valid())
 		return FALSE;
+	if (revert_times[0] && milliseconds - revert_times[0] < 60000)
+	{
+		error(_error_log, "co-op: a third revert in a minute: the players respawn at the checkpoint instead");
+		revert_times[0] = revert_times[1] = 0;
+		return FALSE;
+	}
+	revert_times[0] = revert_times[1];
+	revert_times[1] = milliseconds;
 	game_state_revert();
 	network_coop_reverted(now);
 	ui_widgets_disable_pause_game(30);
@@ -2191,7 +2205,13 @@ static void main_save_map_private(
 				}
 				else if (main_globals.ticks_until_next_save_check-- <= 0)
 				{
-					if (game_safe_to_save())
+					/* port: in network co-op one player safe is enough, as for
+					the scripts' own test (coop_scripts_safe_to_save): the game's
+					asks it of every player at once, whom one dead, one in the air
+					or one driving past held off, and a level's checkpoint (the
+					Maw's before its Warthog run) gave up; a team wipe went back
+					to the one before */
+					if (coop_scripts_safe_to_save())
 					{
 						if (main_globals.safe_intervals++ >= 3)
 							save_map = TRUE;
@@ -2271,10 +2291,9 @@ static void main_lost_map_private(
 	{
 		main_globals.lost_map = FALSE;
 		main_globals.loss_timer = 0;
-		/* port: in network co-op, everyone dying respawns the players where
-		they were at the last checkpoint, without a revert. A mission the
-		scripts failed (game_lost, with players still alive: d40's timer,
-		a50's Keyes) does revert, or its failure cutscene would never end. */
+		/* port: the co-op host chooses whether a team wipe rewinds or only
+		respawns. Scripted failures still revert, or their cutscene would
+		never end. A missing save falls back to checkpoint positions. */
 		/* port: skull: Iron, a solo death restarts the level, and everyone
 		dead in network co-op reverts to the checkpoint
 		(port/linux/game/skulls.c) */
@@ -2285,7 +2304,7 @@ static void main_lost_map_private(
 			else
 				game_state_revert();
 		}
-		else if ((players_are_all_dead() && !skull_active(_skull_iron)) || !main_coop_host_revert())
+		else if ((players_are_all_dead() && !skull_active(_skull_iron) && !network_coop_wipe_reverts()) || !main_coop_host_revert())
 			players_respawn_at_checkpoint();
 	}
 	return;
@@ -2327,6 +2346,44 @@ static void main_load_core_private(
 	game_state_load_core(main_globals.core_name);
 	main_globals.load_core = FALSE;
 	return;
+}
+
+long config_integer(const char *name);
+const char *config_string(const char *name);
+
+/* port: a core of the first level written at the game tick that
+config.toml's debug.core_dump_tick names, named
+for where this run's game state is: two runs with the window at different
+places give two cores to compare, which says which of the game state's
+words are addresses (tools/game_state_compare.py). With debug.core_load,
+that core is loaded at the tick instead, as core_load_name does: a core of
+another run's window, taken in this one's */
+static void main_port_core_dump(
+	void)
+{
+	static long tick = -1;
+	static boolean written = FALSE;
+	char name[64];
+	const char *load;
+
+	if (tick < 0)
+		tick = config_integer("debug.core_dump_tick");
+	if (tick <= 0 || written || global_scenario_index == NONE || !game_in_progress() ||
+		!strcmp(tag_get_name(global_scenario_index), "levels\\ui\\ui") || game_time_get() < tick)
+	{
+		return;
+	}
+	written = TRUE;
+	load = config_string("debug.core_load");
+	if (load && *load)
+	{
+		error(_error_silent, "loading the core d:\\core\\%s at tick %ld", load, (long)game_time_get());
+		main_load_core_name(load);
+		return;
+	}
+	sprintf(name, "game_state_%08lx.bin", (unsigned long)game_state_port_base_address());
+	game_state_save_core(name);
+	error(_error_silent, "wrote the core d:\\core\\%s at tick %ld", name, (long)game_time_get());
 }
 
 static void main_save_core_private(
@@ -3728,6 +3785,7 @@ static boolean main_loop_iteration(
 			{
 				main_save_core_private();
 			}
+			main_port_core_dump();
 
 			if (main_globals.load_core)
 			{
@@ -3938,6 +3996,11 @@ static boolean main_loop_iteration(
 						render_frame = main_globals.main_menu_scenario_loaded ||
 							(main_globals.halt_time_scale && game_time_get()>0);
 					render_frame &= !game_engine_running() || game_time_get()>=3;
+					/* port: a replay's skip ahead: the frame it holds drawn, and its
+					held frames with its lines, though they run no tick or many
+					(port/linux/game/network_replay_playback.c) */
+					if (network_replay_hold_wanted() || network_replay_frozen())
+						render_frame = TRUE;
 
 					profile_scope_enter(main_non_deterministic_update_section)
 					collision_log_continue_period(1);
