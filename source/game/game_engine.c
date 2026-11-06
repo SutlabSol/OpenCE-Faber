@@ -4234,7 +4234,8 @@ static void game_engine_update_purge(
 
 	/* (a client of the distributed netcode removes items when the host does,
 	port/linux/game/network_distributed.c) */
-	if (!network_game_distributed_client())
+	/* port: nor are a Forge session's items, which stay where they were put */
+	if (!network_game_distributed_client() && !g_forge_session_enabled)
 	{
 		struct object_iterator item_iterator;
 
@@ -5346,6 +5347,9 @@ static void game_engine_update_vehicle_respawn(
 
 	if (respawn_ticks <= 0 || network_game_distributed_client() || now % TICKS_PER_SECOND)
 		return;
+	/* port: a Forge session's vehicles stay where Forge put or moved them */
+	if (g_forge_session_enabled)
+		return;
 	if (firefight_active() && global_scenario_get()->type == _scenario_type_multiplayer)
 		return;
 	/* (where the map put them: the vehicles there at the first look) */
@@ -6246,6 +6250,10 @@ boolean game_engine_should_end_game(
 	void)
 {
 	boolean should_end_game = FALSE;
+
+	/* port: a Forge session goes on whoever is left in it */
+	if (g_forge_session_enabled)
+		return FALSE;
 
 	/* port: firefight */
 	if (firefight_active())
@@ -7625,6 +7633,9 @@ boolean multiple_teams_alive(
 {
 	boolean result = FALSE;
 
+	/* port: a Forge session never runs out of teams */
+	if (g_forge_session_enabled)
+		return TRUE;
 	if (players_in_game() <= 1)
 		return TRUE;
 	else

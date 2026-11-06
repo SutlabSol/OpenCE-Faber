@@ -29,6 +29,12 @@ void render_interpolation_first_person(short local_player_index, struct real_mat
 	short node_count, struct render_camera const *camera);
 float render_interpolation_game_time_sec(long ticks);
 
+/* a Forge session is running: set by Faber's Forge (port/forge/src, the
+Windows build), and 0 elsewhere (port/linux/game/forge_fallbacks.c). The game
+engine keeps a Forge session going with any number of players, and leaves
+its items and vehicles where Forge put them */
+extern int g_forge_session_enabled;
+
 /* whether the map being loaded, by the name it was loaded by, is a
 downloaded one, whose scripts may call and set less: one map sharing
 downloaded, or one game.downloaded_maps names (port/linux/game/map_share.c) */

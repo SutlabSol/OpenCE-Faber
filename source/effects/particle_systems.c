@@ -223,10 +223,11 @@ void particle_systems_initialize_for_new_map(
 void particle_system_orphan(
 	long system_index)
 {
-	struct particle_system_datum *system = particle_system_get(system_index);
-
-	SET_FLAG(system->flags, _particle_system_active_bit, FALSE);
-	system->object_index = NONE;
+	/* port: delete orphaned attached particle systems immediately so looping glow/flame particles disappear when deleted in Forge */
+	if (system_index != NONE && particle_systems && particle_systems->valid && datum_try_and_get(particle_systems, system_index))
+	{
+		particle_system_delete(system_index);
+	}
 
 	return;
 }

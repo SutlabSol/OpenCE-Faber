@@ -2272,11 +2272,16 @@ static void patch_forge_device_and_light_tag_runtime(long tag_idx, uint32_t grp,
 	if (!obuf)
 		return;
 
-	/* Ensure point lights and fixtures have a non-zero bounding radius so Forge raycasting and visibility work */
-	if (*(float const *)(obuf + 0x04u) < 0.45f)
-		*(float *)(obuf + 0x04u) = 0.45f;
-	if (*(float const *)(obuf + 0x104u) < 1.5f)
-		*(float *)(obuf + 0x104u) = 1.5f;
+	/* Ensure scenery, devices, and light fixtures have generous bounding radii so Forge raycasting and distant visibility work */
+	if (*(float const *)(obuf + 0x04u) < 1.5f)
+		*(float *)(obuf + 0x04u) = 1.5f;
+	{
+		float min_rbr = *(float const *)(obuf + 0x04u) * 4.0f;
+		if (min_rbr < 8.0f)
+			min_rbr = 8.0f;
+		if (*(float const *)(obuf + 0x104u) < min_rbr)
+			*(float *)(obuf + 0x104u) = min_rbr;
+	}
 
 	if (grp == 'mach' && tag_path &&
 		(_stricmp(tag_path, "levels\\a30\\devices\\beam emitter\\beam emitter") == 0 ||
@@ -2287,9 +2292,59 @@ static void patch_forge_device_and_light_tag_runtime(long tag_idx, uint32_t grp,
 		*(float *)(obuf + 0x104u) = 65.0f; /* render_bounding_radius */
 	}
 
+	/* Patch referenced model ('mode'/'mod2') LOD cutoffs and permutation geometry indices so custom scenery never vanishes at distance */
+	{
+		int32_t m_idx = *(int32_t const *)(obuf + 0x34u);
+		if (m_idx != NONE)
+		{
+			struct model *m = (struct model *)tag_get('mode', m_idx);
+			if (m)
+			{
+				int r_i, p_i, l_i;
+				m->detail_cutoff_pixels[0] = 0.0f;
+				if (m->geometries.count <= 1)
+				{
+					for (l_i = 0; l_i < 5; l_i++)
+						m->detail_cutoff_pixels[l_i] = 0.0f;
+				}
+				if (m->geometries.count > 0 && m->regions.count > 0 && m->regions.address)
+				{
+					struct model_region *regs = (struct model_region *)m->regions.address;
+					for (r_i = 0; r_i < m->regions.count; r_i++)
+					{
+						struct model_region *reg = &regs[r_i];
+						if (reg->permutations.count > 0 && reg->permutations.address)
+						{
+							struct model_region_permutation *perms = (struct model_region_permutation *)reg->permutations.address;
+							for (p_i = 0; p_i < reg->permutations.count; p_i++)
+							{
+								struct model_region_permutation *perm = &perms[p_i];
+								short valid_geom = 0;
+								for (l_i = 4; l_i >= 0; l_i--)
+								{
+									short g = perm->geometry_indices[l_i];
+									if (g >= 0 && g < m->geometries.count)
+									{
+										valid_geom = g;
+										break;
+									}
+								}
+								for (l_i = 0; l_i < 5; l_i++)
+								{
+									if (perm->geometry_indices[l_i] < 0 || perm->geometry_indices[l_i] >= m->geometries.count)
+										perm->geometry_indices[l_i] = valid_geom;
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
 	/* Patch attached 'ligh' tags so placed lights, spotlights, and point lights cast dynamic illumination */
-	att_cnt = *(int32_t const *)(obuf + 0x138u);
-	att_base = *(uint8_t *const *)(obuf + 0x13Cu);
+	att_cnt = *(int32_t const *)(obuf + 0x140u);
+	att_base = *(uint8_t *const *)(obuf + 0x144u);
 	for (a = 0; a < att_cnt && att_base; a++)
 	{
 		uint8_t *att = att_base + (size_t)a * 72u;
@@ -5293,6 +5348,11 @@ static long load_native_ocetags_package_from_json(
 		{
 			patch_vehicle_tag_for_player_driving(pt->runtime_handle, pt->path);
 		}
+		else if ((pt->fourcc == 'scen' || pt->fourcc == 'mach' || pt->fourcc == 'lifi' || pt->fourcc == 'ctrl') &&
+		         pt->raw_len >= 0x17Cu)
+		{
+			patch_forge_device_and_light_tag_runtime(pt->runtime_handle, pt->fourcc, pt->path);
+		}
 	}
 
 	root_handle = pkg_tags[0].runtime_handle;
@@ -5922,8 +5982,16 @@ static int try_resolve_clean_ce_map_by_stem(char const *stem, char *out_path, si
 	snprintf(candidate, sizeof(candidate), "C:/Program Files/Microsoft Games/Halo Custom Edition/maps/%s.map", stem);
 	if (is_ce_v609_map_file(candidate)) { snprintf(out_path, out_sz, "%s", candidate); return 1; }
 
+	snprintf(h_xbox, sizeof(h_xbox), "d:\\custom_maps\\%s.map", stem);
+	platform_translate_path(h_xbox, candidate, sizeof(candidate));
+	if (is_ce_v609_map_file(candidate)) { snprintf(out_path, out_sz, "%s", candidate); return 1; }
+
 	snprintf(candidate, sizeof(candidate), "custom_maps/%s.map", stem);
 	if (is_ce_v609_map_file(candidate)) { snprintf(out_path, out_sz, "%s", candidate); return 1; }
+
+	snprintf(h_xbox, sizeof(h_xbox), "d:\\maps\\%s.map", stem);
+	platform_translate_path(h_xbox, candidate, sizeof(candidate));
+	if ((f = fopen(candidate, "rb")) != NULL) { fclose(f); snprintf(out_path, out_sz, "%s", candidate); return 1; }
 
 	snprintf(candidate, sizeof(candidate), "maps/%s.map", stem);
 	if ((f = fopen(candidate, "rb")) != NULL) { fclose(f); snprintf(out_path, out_sz, "%s", candidate); return 1; }
@@ -5934,9 +6002,19 @@ static int try_resolve_clean_ce_map_by_stem(char const *stem, char *out_path, si
 char const *forge_get_active_map_name(void)
 {
 	char const *loaded = cache_file_loaded_map_name();
+	char const *main_map;
 	if (loaded && loaded[0] && _stricmp(loaded, "ui") != 0 && _stricmp(loaded, "levels\\ui\\ui") != 0)
 		return loaded;
-	return main_get_map_name();
+	main_map = main_get_map_name();
+	if (main_map && main_map[0] && _stricmp(main_map, "ui") != 0 && _stricmp(main_map, "levels\\ui\\ui") != 0)
+		return main_map;
+	if (global_scenario_try_and_get() != NULL)
+	{
+		char const *scnr_name = tag_get_name(0);
+		if (scnr_name && scnr_name[0] && _stricmp(scnr_name, "ui") != 0 && _stricmp(scnr_name, "levels\\ui\\ui") != 0)
+			return scnr_name;
+	}
+	return main_map ? main_map : "";
 }
 
 static void resolve_current_base_map_path(char *out_path, size_t out_sz)
@@ -5948,17 +6026,21 @@ static void resolve_current_base_map_path(char *out_path, size_t out_sz)
 
 	if (ce_loaded && ce_loaded[0])
 	{
+		char xlated_ce[512];
 		char const *rel_ce = ce_loaded;
-		if ((rel_ce[0] == 'd' || rel_ce[0] == 'D') && rel_ce[1] == ':' && (rel_ce[2] == '\\' || rel_ce[2] == '/'))
+		platform_translate_path(ce_loaded, xlated_ce, sizeof(xlated_ce));
+		if (xlated_ce[0])
+			rel_ce = xlated_ce;
+		else if ((rel_ce[0] == 'd' || rel_ce[0] == 'D') && rel_ce[1] == ':' && (rel_ce[2] == '\\' || rel_ce[2] == '/'))
 			rel_ce += 3;
+		if (extract_embedded_forge_base_map_stem(rel_ce, base_stem, sizeof(base_stem)) &&
+			_stricmp(base_stem, rel_ce) != 0 &&
+			try_resolve_clean_ce_map_by_stem(base_stem, out_path, out_sz))
+		{
+			return;
+		}
 		if (is_ce_v609_map_file(rel_ce))
 		{
-			if (extract_embedded_forge_base_map_stem(rel_ce, base_stem, sizeof(base_stem)) &&
-				_stricmp(base_stem, rel_ce) != 0 &&
-				try_resolve_clean_ce_map_by_stem(base_stem, out_path, out_sz))
-			{
-				return;
-			}
 			snprintf(out_path, out_sz, "%s", rel_ce);
 			return;
 		}
@@ -5968,13 +6050,17 @@ static void resolve_current_base_map_path(char *out_path, size_t out_sz)
 	if (map_leaf && map_leaf[0])
 	{
 		char const *slash = strrchr(map_leaf, '\\');
+		char d_xbox[160];
 		char candidate[512];
 		if (!slash)
 			slash = strrchr(map_leaf, '/');
 		if (slash)
 			map_leaf = slash + 1;
 
-		snprintf(candidate, sizeof(candidate), "custom_maps/%s.map", map_leaf);
+		snprintf(d_xbox, sizeof(d_xbox), "d:\\custom_maps\\%s.map", map_leaf);
+		platform_translate_path(d_xbox, candidate, sizeof(candidate));
+		if (!candidate[0])
+			snprintf(candidate, sizeof(candidate), "custom_maps/%s.map", map_leaf);
 		if (extract_embedded_forge_base_map_stem(candidate, base_stem, sizeof(base_stem)) &&
 			_stricmp(base_stem, map_leaf) != 0 &&
 			try_resolve_clean_ce_map_by_stem(base_stem, out_path, out_sz))
@@ -5992,10 +6078,10 @@ static void resolve_current_base_map_path(char *out_path, size_t out_sz)
 
 	if (try_resolve_clean_ce_map_by_stem("bloodgulch", out_path, out_sz))
 		return;
-	if ((f = fopen("maps/bloodgulch.map", "rb")) != NULL)
+	platform_translate_path("d:\\maps\\bloodgulch.map", out_path, out_sz);
+	if ((f = fopen(out_path, "rb")) != NULL)
 	{
 		fclose(f);
-		snprintf(out_path, out_sz, "maps/bloodgulch.map");
 		return;
 	}
 	snprintf(out_path, out_sz, "maps/bloodgulch.map");
@@ -6816,9 +6902,38 @@ void forge_load_saved_map_state_if_present(char const *map_name)
 			{
 				if (instances[ti].group_tag == 'vehi' && instances[ti].base_address)
 					patch_vehicle_tag_for_player_driving(instances[ti].tag_index, instances[ti].name);
+				else if ((instances[ti].group_tag == 'scen' || instances[ti].group_tag == 'mach' ||
+				          instances[ti].group_tag == 'lifi' || instances[ti].group_tag == 'ctrl') &&
+				         instances[ti].base_address)
+					patch_forge_device_and_light_tag_runtime(instances[ti].tag_index, instances[ti].group_tag, instances[ti].name);
+			}
+			{
+				struct object_iterator o_iter;
+				struct object_datum *o_obj;
+				object_iterator_new(&o_iter, _object_mask_scenery | _object_mask_machine | _object_mask_light_fixture | _object_mask_control, 0);
+				while ((o_obj = (struct object_datum *)object_iterator_next(&o_iter)) != NULL)
+				{
+					if (o_obj->definition_index != NONE)
+					{
+						uint8_t const *ob = (uint8_t const *)tag_get('obje', o_obj->definition_index);
+						if (ob)
+						{
+							float br = *(float const *)(ob + 0x04u);
+							if (br > o_obj->object.bounding_sphere_radius)
+								o_obj->object.bounding_sphere_radius = br;
+						}
+					}
+				}
 			}
 		}
 	}
+
+	/* A network client never restores placements from its own copy of the map's Forge state (the
+	 * FLG1 trailer or the .fmap/.txt sidecars): the host is authoritative and sends its live
+	 * placements (!FH: / !FM: / !FD:). Restoring a local copy too put stale or duplicate objects
+	 * over the host's. */
+	if (game_connection() == _game_connection_network_client)
+		return;
 
 	slash = strrchr(map_name, '\\');
 	if (!slash)

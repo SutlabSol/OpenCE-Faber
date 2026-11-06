@@ -219,7 +219,9 @@ static void forge_format_host_spawn_packet(
 	int pitch_cr = (int)(pitch * 100.0f);
 	int roll_cr = (int)(roll * 100.0f);
 
-	if (obj_idx != NONE)
+	/* Only encode object_index for network-shared objects ('vehi', 'weap', 'eqip', 'bipd', 'garb', 'actv').
+	 * Non-networked objects ('scen', 'mach', 'ctrl', 'lifi') have independent local object_index values on Host and Client! */
+	if (obj_idx != NONE && forge_object_is_network_shared(group_tag))
 	{
 		unsigned int base_enc = (unsigned int)((DATUM_INDEX_TO_ABSOLUTE_INDEX(obj_idx) + 1) & 0xFFFu);
 		unsigned int weap0_enc = 0u;
@@ -423,7 +425,8 @@ void forge_network_sync_tick(void)
 				}
 				else if (inst->edit_entry_index >= 0)
 				{
-					int obj_abs = (inst->object_index != NONE) ? (int)DATUM_INDEX_TO_ABSOLUTE_INDEX(inst->object_index) : -1;
+					int obj_abs = (inst->object_index != NONE && forge_object_is_network_shared(inst->group_tag))
+						? (int)DATUM_INDEX_TO_ABSOLUTE_INDEX(inst->object_index) : -1;
 					int is_held = (g_forge.grabbed_live_index == idx) ? 1 : 0;
 					snprintf(
 						msg,
@@ -467,7 +470,7 @@ void forge_network_send_spawn_ext(
 
 	hash = forge_catalog_entry_hash(group_tag, tag_path);
 
-	if (host_obj_idx != NONE)
+	if (host_obj_idx != NONE && forge_object_is_network_shared(group_tag))
 	{
 		int obj_abs = (int)DATUM_INDEX_TO_ABSOLUTE_INDEX(host_obj_idx);
 		if (obj_abs >= 0 && obj_abs < FORGE_MAX_TRACKED_NET_OBJECTS)
@@ -481,6 +484,8 @@ void forge_network_send_spawn_ext(
 
 	if (game_connection() == _game_connection_network_client)
 	{
+		if (live_idx >= 0 && live_idx < g_forge.live_instance_count)
+			g_forge.live_instances[live_idx].pad_inst |= 0x80u;
 		snprintf(
 			msg,
 			sizeof(msg),
@@ -529,22 +534,26 @@ void forge_network_send_transform_ext(
 		return;
 	g_last_transform_send_ms = now;
 
-	obj_abs = (obj_idx != NONE) ? (int)DATUM_INDEX_TO_ABSOLUTE_INDEX(obj_idx) : -1;
-	if (obj_abs < 0 && live_idx >= 0)
 	{
-		int k;
-		for (k = 0; k < FORGE_MAX_TRACKED_NET_OBJECTS; k++)
+		int is_net_shared = (live_idx < 0 || live_idx >= g_forge.live_instance_count ||
+			forge_object_is_network_shared(g_forge.live_instances[live_idx].group_tag));
+		obj_abs = (is_net_shared && obj_idx != NONE) ? (int)DATUM_INDEX_TO_ABSOLUTE_INDEX(obj_idx) : -1;
+		if (is_net_shared && obj_abs < 0 && live_idx >= 0)
 		{
-			if (g_net_obj_live_index[k] == live_idx)
+			int k;
+			for (k = 0; k < FORGE_MAX_TRACKED_NET_OBJECTS; k++)
 			{
-				obj_abs = k;
-				break;
+				if (g_net_obj_live_index[k] == live_idx)
+				{
+					obj_abs = k;
+					break;
+				}
 			}
 		}
-	}
-	if (obj_abs >= 0 && obj_abs < FORGE_MAX_TRACKED_NET_OBJECTS)
-	{
-		g_net_obj_is_held[obj_abs] = is_held ? 1 : 0;
+		if (is_net_shared && obj_abs >= 0 && obj_abs < FORGE_MAX_TRACKED_NET_OBJECTS)
+		{
+			g_net_obj_is_held[obj_abs] = is_held ? 1 : 0;
+		}
 	}
 
 	snprintf(
@@ -577,7 +586,11 @@ void forge_network_send_delete_ext(int32_t live_idx, long obj_idx)
 	if (!forge_is_multiplayer_session())
 		return;
 
-	obj_abs = (obj_idx != NONE) ? (int)DATUM_INDEX_TO_ABSOLUTE_INDEX(obj_idx) : -1;
+	{
+		int is_net_shared = (live_idx < 0 || live_idx >= g_forge.live_instance_count ||
+			forge_object_is_network_shared(g_forge.live_instances[live_idx].group_tag));
+		obj_abs = (is_net_shared && obj_idx != NONE) ? (int)DATUM_INDEX_TO_ABSOLUTE_INDEX(obj_idx) : -1;
+	}
 	snprintf(msg, sizeof(msg), "!FD:%d:%d", (int)live_idx, obj_abs);
 
 	if (game_connection() == _game_connection_network_client)
@@ -610,6 +623,12 @@ static long forge_find_live_object_by_abs_index(int obj_abs)
 
 static int32_t forge_resolve_target_live_idx(int live_idx, int obj_abs)
 {
+	if (live_idx >= 0 && live_idx < g_forge.live_instance_count &&
+		g_forge.live_instances[live_idx].active &&
+		!forge_object_is_network_shared(g_forge.live_instances[live_idx].group_tag))
+	{
+		return live_idx;
+	}
 	if (obj_abs >= 0 && obj_abs < FORGE_MAX_TRACKED_NET_OBJECTS)
 	{
 		int32_t mapped_idx = g_net_obj_live_index[obj_abs];
@@ -690,121 +709,175 @@ static void forge_client_handle_host_spawn(
 	long weap0_def_idx = NONE;
 	int32_t match_idx = -1;
 	int matched_client_unlinked = 0;
+	int is_net_shared = 0;
 	int i;
 
 	if (!ce)
 		return;
 
 	actual_grp = ce->group_tag;
-	if (ce->group_tag != 'spwn' && ce->group_tag != 'tele' && ce->group_tag != 'flag' && ce->group_tag != 'ffsp')
+	is_net_shared = forge_object_is_network_shared(ce->group_tag);
 	{
-		/* Fault in external Xbox campaign tags or .ocetags packages on the client before object creation! */
-		def_idx = forge_resolve_engine_tag(ce->group_tag, ce->tag_path, &actual_grp);
-	}
-
-	if (obj_abs >= 0 && obj_abs < FORGE_MAX_TRACKED_NET_OBJECTS)
-	{
-		if (def_idx != NONE)
-			g_net_obj_def_index[obj_abs] = def_idx;
-		g_net_obj_is_held[obj_abs] = host_is_held ? 1 : 0;
-	}
-
-	if (weap0_abs >= 0 && weap0_abs < FORGE_MAX_TRACKED_NET_OBJECTS && def_idx != NONE && actual_grp == 'vehi')
-	{
-		struct unit_definition const *udef = (struct unit_definition const *)tag_get('unit', def_idx);
-		if (udef && udef->unit.initial_weapons.count > 0 && udef->unit.initial_weapons.address)
+		if (!is_net_shared)
 		{
-			struct tag_reference const *iw_ref = (struct tag_reference const *)udef->unit.initial_weapons.address;
-			if (iw_ref->index != NONE)
+			obj_abs = -1;
+			weap0_abs = -1;
+		}
+		if (ce->group_tag != 'spwn' && ce->group_tag != 'tele' && ce->group_tag != 'flag' && ce->group_tag != 'ffsp')
+		{
+			/* Fault in external Xbox campaign tags or .ocetags packages on the client before object creation! */
+			def_idx = forge_resolve_engine_tag(ce->group_tag, ce->tag_path, &actual_grp);
+		}
+
+		if (is_net_shared && obj_abs >= 0 && obj_abs < FORGE_MAX_TRACKED_NET_OBJECTS)
+		{
+			if (def_idx != NONE)
+				g_net_obj_def_index[obj_abs] = def_idx;
+			g_net_obj_is_held[obj_abs] = host_is_held ? 1 : 0;
+		}
+
+		if (is_net_shared && weap0_abs >= 0 && weap0_abs < FORGE_MAX_TRACKED_NET_OBJECTS && def_idx != NONE && actual_grp == 'vehi')
+		{
+			struct unit_definition const *udef = (struct unit_definition const *)tag_get('unit', def_idx);
+			if (udef && udef->unit.initial_weapons.count > 0 && udef->unit.initial_weapons.address)
 			{
-				weap0_def_idx = iw_ref->index;
-				g_net_obj_def_index[weap0_abs] = weap0_def_idx;
+				struct tag_reference const *iw_ref = (struct tag_reference const *)udef->unit.initial_weapons.address;
+				if (iw_ref->index != NONE)
+				{
+					weap0_def_idx = iw_ref->index;
+					g_net_obj_def_index[weap0_abs] = weap0_def_idx;
+				}
 			}
 		}
-	}
 
-	/* 1. If the Client is currently holding an unlinked instance of this exact tag, match it first */
-	if (g_forge.grabbed_live_index >= 0 && g_forge.grabbed_live_index < g_forge.live_instance_count)
-	{
-		struct forge_live_instance const *cand = &g_forge.live_instances[g_forge.grabbed_live_index];
-		if (cand->active && !cand->is_default_scenario_object && cand->object_index == NONE &&
-			cand->group_tag == ce->group_tag && _stricmp(cand->tag_path, ce->tag_path) == 0)
+		/* 1. If the Client is currently holding a pending/unlinked instance of this exact tag, match it first */
+		if (g_forge.grabbed_live_index >= 0 && g_forge.grabbed_live_index < g_forge.live_instance_count)
 		{
-			match_idx = g_forge.grabbed_live_index;
-			matched_client_unlinked = 1;
-		}
-	}
-
-	/* 2. Check if host_live_idx points to an unlinked instance of this tag */
-	if (match_idx < 0 && host_live_idx >= 0 && host_live_idx < g_forge.live_instance_count)
-	{
-		struct forge_live_instance const *cand = &g_forge.live_instances[host_live_idx];
-		if (cand->active && !cand->is_default_scenario_object && cand->object_index == NONE &&
-			cand->group_tag == ce->group_tag && _stricmp(cand->tag_path, ce->tag_path) == 0)
-		{
-			match_idx = host_live_idx;
-			matched_client_unlinked = 1;
-		}
-	}
-
-	/* 3. Scan for any unlinked Client-created instance of this tag */
-	if (match_idx < 0)
-	{
-		for (i = g_forge.live_instance_count - 1; i >= 0; i--)
-		{
-			struct forge_live_instance const *cand = &g_forge.live_instances[i];
-			if (!cand->active || cand->is_default_scenario_object || cand->object_index != NONE)
-				continue;
-			if (cand->group_tag == ce->group_tag && _stricmp(cand->tag_path, ce->tag_path) == 0)
+			struct forge_live_instance const *cand = &g_forge.live_instances[g_forge.grabbed_live_index];
+			if (cand->active && !cand->is_default_scenario_object &&
+				((cand->pad_inst & 0x80u) != 0 || (is_net_shared && cand->object_index == NONE)) &&
+				cand->group_tag == ce->group_tag && _stricmp(cand->tag_path, ce->tag_path) == 0)
 			{
-				match_idx = i;
+				match_idx = g_forge.grabbed_live_index;
 				matched_client_unlinked = 1;
-				break;
 			}
 		}
-	}
 
-	/* 4. Check if already linked to obj_abs or at the exact position */
-	if (match_idx < 0)
-	{
-		long existing_obj = forge_find_live_object_by_abs_index(obj_abs);
-		for (i = g_forge.live_instance_count - 1; i >= 0; i--)
+		/* 2. Check if host_live_idx points to a pending/unlinked instance of this tag */
+		if (match_idx < 0 && host_live_idx >= 0 && host_live_idx < g_forge.live_instance_count)
 		{
-			struct forge_live_instance const *cand = &g_forge.live_instances[i];
-			float dx, dy, dz;
-			if (!cand->active || cand->is_default_scenario_object)
-				continue;
-			if (existing_obj != NONE && cand->object_index == existing_obj)
+			struct forge_live_instance const *cand = &g_forge.live_instances[host_live_idx];
+			if (cand->active && !cand->is_default_scenario_object &&
+				((cand->pad_inst & 0x80u) != 0 || (is_net_shared && cand->object_index == NONE)) &&
+				cand->group_tag == ce->group_tag && _stricmp(cand->tag_path, ce->tag_path) == 0)
 			{
-				match_idx = i;
-				break;
+				match_idx = host_live_idx;
+				matched_client_unlinked = 1;
 			}
-			if (cand->group_tag != ce->group_tag || _stricmp(cand->tag_path, ce->tag_path) != 0)
-				continue;
-			dx = cand->x - x;
-			dy = cand->y - y;
-			dz = cand->z - z;
-			if (dx * dx + dy * dy + dz * dz < 4.0f)
+		}
+
+		/* 3. Scan for any pending/unlinked Client-created instance of this tag */
+		if (match_idx < 0)
+		{
+			for (i = g_forge.live_instance_count - 1; i >= 0; i--)
 			{
-				match_idx = i;
-				break;
+				struct forge_live_instance const *cand = &g_forge.live_instances[i];
+				if (!cand->active || cand->is_default_scenario_object)
+					continue;
+				if ((cand->pad_inst & 0x80u) == 0 && (!is_net_shared || cand->object_index != NONE))
+					continue;
+				if (cand->group_tag == ce->group_tag && _stricmp(cand->tag_path, ce->tag_path) == 0)
+				{
+					match_idx = i;
+					matched_client_unlinked = 1;
+					break;
+				}
 			}
+		}
+
+		/* 4. Check if already at host_live_idx, linked to obj_abs, or at the exact position */
+		if (match_idx < 0)
+		{
+			long existing_obj = is_net_shared ? forge_find_live_object_by_abs_index(obj_abs) : NONE;
+			if (host_live_idx >= 0 && host_live_idx < g_forge.live_instance_count)
+			{
+				struct forge_live_instance const *hcand = &g_forge.live_instances[host_live_idx];
+				if (hcand->active && !hcand->is_default_scenario_object &&
+					hcand->group_tag == ce->group_tag && _stricmp(hcand->tag_path, ce->tag_path) == 0)
+				{
+					match_idx = host_live_idx;
+				}
+			}
+			for (i = g_forge.live_instance_count - 1; match_idx < 0 && i >= 0; i--)
+			{
+				struct forge_live_instance const *cand = &g_forge.live_instances[i];
+				float dx, dy, dz;
+				if (!cand->active || cand->is_default_scenario_object)
+					continue;
+				if (existing_obj != NONE && cand->object_index == existing_obj)
+				{
+					match_idx = i;
+					break;
+				}
+				if (cand->group_tag != ce->group_tag || _stricmp(cand->tag_path, ce->tag_path) != 0)
+					continue;
+				dx = cand->x - x;
+				dy = cand->y - y;
+				dz = cand->z - z;
+				if (dx * dx + dy * dy + dz * dz < 4.0f)
+				{
+					match_idx = i;
+					break;
+				}
+			}
+		}
+
+		if (match_idx >= 0)
+		{
+			g_forge.live_instances[match_idx].pad_inst &= (uint8_t)~0x80u;
+			if (host_live_idx >= 0 &&
+				host_live_idx < FORGE_MAX_LIVE_INSTANCES &&
+				match_idx != host_live_idx &&
+				!g_forge.live_instances[host_live_idx].active)
+			{
+				g_forge.live_instances[host_live_idx] = g_forge.live_instances[match_idx];
+				memset(&g_forge.live_instances[match_idx], 0, sizeof(g_forge.live_instances[match_idx]));
+				if (host_live_idx >= g_forge.live_instance_count)
+					g_forge.live_instance_count = host_live_idx + 1;
+				if (g_forge.grabbed_live_index == match_idx)
+					g_forge.grabbed_live_index = host_live_idx;
+				if (g_forge.hovered_live_index == match_idx)
+					g_forge.hovered_live_index = host_live_idx;
+				match_idx = host_live_idx;
+			}
+			if (!is_net_shared && matched_client_unlinked && match_idx < g_forge.live_instance_count)
+			{
+				struct forge_live_instance const *inst = &g_forge.live_instances[match_idx];
+				int effective_held = (g_forge.grabbed_live_index == match_idx) ? 1 : 0;
+				forge_network_send_transform_ext(
+					match_idx,
+					NONE,
+					inst->x, inst->y, inst->z,
+					inst->yaw, inst->pitch, inst->roll,
+					effective_held,
+					1);
+			}
+		}
+		else
+		{
+			match_idx = forge_3d_spawn_object_at_slot(
+				host_live_idx,
+				ce->group_tag,
+				ce->tag_path,
+				ce->source_cache_id,
+				x, y, z,
+				yaw, pitch, roll,
+				team_designator,
+				0);
 		}
 	}
 
-	if (match_idx < 0)
-	{
-		match_idx = forge_3d_spawn_object_at(
-			ce->group_tag,
-			ce->tag_path,
-			ce->source_cache_id,
-			x, y, z,
-			yaw, pitch, roll,
-			team_designator,
-			0);
-	}
-
-	if (obj_abs >= 0 && obj_abs < FORGE_MAX_TRACKED_NET_OBJECTS)
+	if (is_net_shared && obj_abs >= 0 && obj_abs < FORGE_MAX_TRACKED_NET_OBJECTS)
 	{
 		long existing_obj;
 		int effective_held = host_is_held;
@@ -861,6 +934,10 @@ static void forge_client_handle_host_spawn(
 					1);
 			}
 		}
+	}
+	else if (!is_net_shared && !matched_client_unlinked && match_idx >= 0 && match_idx < g_forge.live_instance_count)
+	{
+		forge_3d_move_instance_ext(match_idx, x, y, z, yaw, pitch, roll, host_is_held, 0);
 	}
 }
 
@@ -985,8 +1062,12 @@ int forge_network_intercept_chat_packet(long machine_index, char const *text, in
 				{
 					char relay[64];
 					int host_obj_abs = obj_abs;
-					if (host_obj_abs < 0 && g_forge.live_instances[target_idx].object_index != NONE)
+					if (host_obj_abs < 0 &&
+						g_forge.live_instances[target_idx].object_index != NONE &&
+						forge_object_is_network_shared(g_forge.live_instances[target_idx].group_tag))
+					{
 						host_obj_abs = (int)DATUM_INDEX_TO_ABSOLUTE_INDEX(g_forge.live_instances[target_idx].object_index);
+					}
 					forge_3d_move_instance_ext(
 						target_idx,
 						x, y, z,

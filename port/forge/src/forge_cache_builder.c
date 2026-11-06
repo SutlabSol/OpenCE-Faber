@@ -2848,6 +2848,71 @@ static int32_t out_map_bake_ocetags_package(
 				}
 			}
 			write_u32(out->data + pt->def_foff + 0x00u, read_u32(out->data + pt->def_foff + 0x00u) & ~0x02u); /* clear _gbxmodel_parts_have_local_nodes_bit */
+			/* Prevent distant LOD culling on baked .ocetags models */
+			write_f32(out->data + pt->def_foff + 0x08u, 0.0f);
+			if (geom_cnt <= 1)
+			{
+				int l_i;
+				for (l_i = 0; l_i < 5; l_i++)
+					write_f32(out->data + pt->def_foff + 0x08u + (uint32_t)l_i * 4u, 0.0f);
+			}
+			if (geom_cnt > 0)
+			{
+				int32_t reg_cnt = read_s32(out->data + pt->def_foff + 0xC4u);
+				uint32_t reg_addr = read_u32(out->data + pt->def_foff + 0xC8u);
+				if (reg_cnt > 0 && reg_addr >= CE_TAG_BASE_ADDR)
+				{
+					uint32_t reg_base = tag_data_offset + (reg_addr - CE_TAG_BASE_ADDR);
+					int r_i;
+					for (r_i = 0; r_i < reg_cnt; r_i++)
+					{
+						uint32_t r_foff = reg_base + (uint32_t)r_i * 76u;
+						int32_t pm_cnt = read_s32(out->data + r_foff + 0x40u);
+						uint32_t pm_addr = read_u32(out->data + r_foff + 0x44u);
+						if (pm_cnt > 0 && pm_addr >= CE_TAG_BASE_ADDR)
+						{
+							uint32_t pm_base = tag_data_offset + (pm_addr - CE_TAG_BASE_ADDR);
+							int pm_i, l_i;
+							for (pm_i = 0; pm_i < pm_cnt; pm_i++)
+							{
+								uint32_t pm_foff = pm_base + (uint32_t)pm_i * 88u;
+								int16_t valid_g = 0;
+								for (l_i = 4; l_i >= 0; l_i--)
+								{
+									int16_t g = read_s16(out->data + pm_foff + 0x40u + (uint32_t)l_i * 2u);
+									if (g >= 0 && g < geom_cnt)
+									{
+										valid_g = g;
+										break;
+									}
+								}
+								for (l_i = 0; l_i < 5; l_i++)
+								{
+									int16_t g = read_s16(out->data + pm_foff + 0x40u + (uint32_t)l_i * 2u);
+									if (g < 0 || g >= geom_cnt)
+										write_s16(out->data + pm_foff + 0x40u + (uint32_t)l_i * 2u, valid_g);
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		else if ((pt->fourcc == 'scen' || pt->fourcc == 'mach' || pt->fourcc == 'lifi' || pt->fourcc == 'ctrl') &&
+		         pt->raw_len >= 0x17Cu)
+		{
+			float br = read_f32(out->data + pt->def_foff + 0x04u);
+			float min_rbr;
+			if (br < 1.5f)
+			{
+				br = 1.5f;
+				write_f32(out->data + pt->def_foff + 0x04u, br);
+			}
+			min_rbr = br * 4.0f;
+			if (min_rbr < 8.0f)
+				min_rbr = 8.0f;
+			if (read_f32(out->data + pt->def_foff + 0x104u) < min_rbr)
+				write_f32(out->data + pt->def_foff + 0x104u, min_rbr);
 		}
 		else if (pt->fourcc == 'coll' && pt->raw_len >= 0x298u)
 		{
@@ -4376,20 +4441,36 @@ static int32_t out_map_bake_xbox_tag_closure(
 				}
 			}
 		}
-		else if (xt->fourcc == 'scen' || xt->fourcc == 'lifi')
+		else if (xt->fourcc == 'scen' || xt->fourcc == 'lifi' || xt->fourcc == 'ctrl')
 		{
-			if (read_f32(out->data + xt->def_foff + 0x04u) < 0.45f)
-				write_f32(out->data + xt->def_foff + 0x04u, 0.45f);
-			if (read_f32(out->data + xt->def_foff + 0x104u) < 1.5f)
-				write_f32(out->data + xt->def_foff + 0x104u, 1.5f);
+			float br = read_f32(out->data + xt->def_foff + 0x04u);
+			float min_rbr;
+			if (br < 1.5f)
+			{
+				br = 1.5f;
+				write_f32(out->data + xt->def_foff + 0x04u, br);
+			}
+			min_rbr = br * 4.0f;
+			if (min_rbr < 8.0f)
+				min_rbr = 8.0f;
+			if (read_f32(out->data + xt->def_foff + 0x104u) < min_rbr)
+				write_f32(out->data + xt->def_foff + 0x104u, min_rbr);
 		}
 		else if (xt->fourcc == 'mach')
 		{
 			int16_t mtype = read_s16(out->data + xt->def_foff + 0x290u);
-			if (read_f32(out->data + xt->def_foff + 0x04u) < 0.45f)
-				write_f32(out->data + xt->def_foff + 0x04u, 0.45f);
-			if (read_f32(out->data + xt->def_foff + 0x104u) < 1.5f)
-				write_f32(out->data + xt->def_foff + 0x104u, 1.5f);
+			float br = read_f32(out->data + xt->def_foff + 0x04u);
+			float min_rbr;
+			if (br < 1.5f)
+			{
+				br = 1.5f;
+				write_f32(out->data + xt->def_foff + 0x04u, br);
+			}
+			min_rbr = br * 4.0f;
+			if (min_rbr < 8.0f)
+				min_rbr = 8.0f;
+			if (read_f32(out->data + xt->def_foff + 0x104u) < min_rbr)
+				write_f32(out->data + xt->def_foff + 0x104u, min_rbr);
 			if (is_red_beam_variant || strstr(xt->name, "beam emitter") != NULL)
 			{
 				write_f32(out->data + xt->def_foff + 0x04u, 65.0f);  /* bounding_radius */
@@ -4918,6 +4999,21 @@ static int32_t out_map_bake_non_native_object(
 	}
 	if (pobj->bounding_radius > 0.1f)
 		write_f32(out->data + obj_def_foff + 0x04u, pobj->bounding_radius);
+	if (pobj->group_tag == 'scen' || pobj->group_tag == 'mach' || pobj->group_tag == 'lifi' || pobj->group_tag == 'ctrl')
+	{
+		float br = read_f32(out->data + obj_def_foff + 0x04u);
+		float min_rbr;
+		if (br < 1.5f)
+		{
+			br = 1.5f;
+			write_f32(out->data + obj_def_foff + 0x04u, br);
+		}
+		min_rbr = br * 4.0f;
+		if (min_rbr < 8.0f)
+			min_rbr = 8.0f;
+		if (read_f32(out->data + obj_def_foff + 0x104u) < min_rbr)
+			write_f32(out->data + obj_def_foff + 0x104u, min_rbr);
+	}
 	if (has_coll_offsets)
 		memcpy(out->data + obj_def_foff + 0x08u, coll_offsets_24, 24);
 
@@ -5327,10 +5423,22 @@ static int forge_build_xbox_flg1_map(
 
 	snprintf(xbox_path, sizeof(xbox_path), "maps/%s.map", base_stem);
 	in_f = fopen(xbox_path, "rb");
+	if (!in_f)
+	{
+		char d_xbox[160];
+		snprintf(d_xbox, sizeof(d_xbox), "d:\\maps\\%s.map", base_stem);
+		platform_translate_path(d_xbox, xbox_path, sizeof(xbox_path));
+		in_f = fopen(xbox_path, "rb");
+	}
 	if (!in_f && base_map_path && base_map_path[0])
 	{
-		snprintf(xbox_path, sizeof(xbox_path), "%s", base_map_path);
+		platform_translate_path(base_map_path, xbox_path, sizeof(xbox_path));
 		in_f = fopen(xbox_path, "rb");
+		if (!in_f)
+		{
+			snprintf(xbox_path, sizeof(xbox_path), "%s", base_map_path);
+			in_f = fopen(xbox_path, "rb");
+		}
 	}
 	if (!in_f)
 		return 0;
@@ -5525,7 +5633,18 @@ static int forge_build_xbox_flg1_map(
 	write_u32(out.data + 0x1F8u, desc_len);
 	write_u32(out.data + 0x1FCu, 0x464C4731u); /* 'FLG1' OpenCE : Faber map signature */
 
-	snprintf(map_path, sizeof(map_path), "custom_maps/%s.map", output_map_name);
+	{
+		char d_dir[64];
+		char d_out[256];
+		snprintf(d_dir, sizeof(d_dir), "d:\\custom_maps");
+		platform_translate_path(d_dir, map_path, sizeof(map_path));
+		if (map_path[0])
+			FORGE_MKDIR(map_path);
+		snprintf(d_out, sizeof(d_out), "d:\\custom_maps\\%s.map", output_map_name);
+		platform_translate_path(d_out, map_path, sizeof(map_path));
+		if (!map_path[0])
+			snprintf(map_path, sizeof(map_path), "custom_maps/%s.map", output_map_name);
+	}
 	out_f = fopen(map_path, "wb");
 	if (!out_f)
 	{
@@ -5595,7 +5714,10 @@ int forge_export_scenario_map(
 				if (!forge_source_map_open(cand_path, &base_map) || base_map.version != CACHE_VERSION_CE)
 				{
 					if (base_map.data) forge_source_map_close(&base_map);
-					snprintf(cand_path, sizeof(cand_path), "custom_maps/%s", want_file);
+					snprintf(h_xbox, sizeof(h_xbox), "d:\\custom_maps\\%s", want_file);
+					platform_translate_path(h_xbox, cand_path, sizeof(cand_path));
+					if (!cand_path[0])
+						snprintf(cand_path, sizeof(cand_path), "custom_maps/%s", want_file);
 					if (!forge_source_map_open(cand_path, &base_map) || base_map.version != CACHE_VERSION_CE)
 					{
 						if (base_map.data) forge_source_map_close(&base_map);
@@ -6437,7 +6559,18 @@ int forge_export_scenario_map(
 
 	free(pending_objs);
 
-	snprintf(map_path, sizeof(map_path), "custom_maps/%s.map", output_map_name);
+	{
+		char d_dir[64];
+		char d_out[256];
+		snprintf(d_dir, sizeof(d_dir), "d:\\custom_maps");
+		platform_translate_path(d_dir, map_path, sizeof(map_path));
+		if (map_path[0])
+			FORGE_MKDIR(map_path);
+		snprintf(d_out, sizeof(d_out), "d:\\custom_maps\\%s.map", output_map_name);
+		platform_translate_path(d_out, map_path, sizeof(map_path));
+		if (!map_path[0])
+			snprintf(map_path, sizeof(map_path), "custom_maps/%s.map", output_map_name);
+	}
 	/* Remove any legacy external .bmp / .txt / sidecar files for this map */
 	{
 		char legacy_path[512];

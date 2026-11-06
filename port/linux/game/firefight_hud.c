@@ -500,7 +500,8 @@ static void draw_world_navpoint(
 	real_point3d const *world_pos,
 	char const *label,
 	pixel32 box_color,
-	real_argb_color const *text_color)
+	real_argb_color const *text_color,
+	boolean is_friendly_marker)
 {
 	real_point3d view_pt;
 	real_point2d screen_pt;
@@ -508,31 +509,120 @@ static void draw_world_navpoint(
 	char full_label[48];
 	rectangle2d marker;
 	short pill_x0, pill_y0, pill_x1, pill_y1;
+	boolean drew_friendly_bitmap = FALSE;
 
 	matrix4x3_transform_point(&render.frustum.world_to_view, world_pos, &view_pt);
 	if (!render_camera_view_to_screen(&render.camera, &render.frustum, &view_pt, &screen_pt))
+	{
+		/* When ordnance is off-screen, render a green off-screen directional arrow */
+		if (is_friendly_marker && render.local_player_index != NONE && hud_globals && hud_globals->waypoint.arrows.count > 0)
+		{
+			short arrow_index = find_nav_point("default");
+			if (arrow_index == NONE)
+				arrow_index = 0;
+			if (arrow_index >= 0 && arrow_index < hud_globals->waypoint.arrows.count)
+			{
+				struct ff_hud_waypoint_arrow
+				{
+					char name[0x20];
+					long unused0[2];
+					unsigned long color;
+					real opacity;
+					real fade;
+					short sequence_indices[3];
+					short pad;
+					long unused1[4];
+					unsigned long flags;
+					long unused2[6];
+				};
+				struct ff_hud_waypoint_arrow *arrow = TAG_BLOCK_GET_ELEMENT(
+					&hud_globals->waypoint.arrows,
+					arrow_index,
+					struct ff_hud_waypoint_arrow);
+				unsigned long saved_color = arrow->color;
+				arrow->color = 0x0040E070;
+				custom_render_nav_point(
+					render.local_player_index,
+					world_pos,
+					arrow_index,
+					1 /* _waypoint_off_screen */);
+				arrow->color = saved_color;
+			}
+		}
 		return;
+	}
 
 	dist = distance3d(&render.camera.position, world_pos);
 	snprintf(full_label, sizeof(full_label), "%s [%dm]", label, (int)(dist * 3.0f + 0.5f));
 
 	pill_x0 = (short)(screen_pt.x - 48.0f * scale + 0.5f);
-	pill_y0 = (short)(screen_pt.y - 17.0f * scale + 0.5f);
+	pill_y0 = (short)(screen_pt.y - 21.0f * scale + 0.5f);
 	pill_x1 = (short)(screen_pt.x + 48.0f * scale + 0.5f);
-	pill_y1 = (short)(screen_pt.y - 4.0f * scale + 0.5f);
+	pill_y1 = (short)(screen_pt.y - 8.0f * scale + 0.5f);
 	firefight_draw_ce_rounded_pill(pill_x0, pill_y0, pill_x1, pill_y1, 0, scale, 0xD8FFFFFFUL);
 
-	marker.x0 = (short)(screen_pt.x - 3.5f * scale);
-	marker.y0 = (short)(screen_pt.y - 2.5f * scale);
-	marker.x1 = (short)(screen_pt.x + 3.5f * scale);
-	marker.y1 = (short)(screen_pt.y + 4.5f * scale);
-	draw_quad(&marker, box_color);
+	if (is_friendly_marker)
+	{
+		long mp_hud_tag_index = interface_get_tag_index(_interface_bitmap_multiplayer_hud);
+		if (mp_hud_tag_index != NONE)
+		{
+			struct bitmap_data *bitmap = bitmap_group_get_bitmap_from_sequence(
+				mp_hud_tag_index,
+				0,
+				0);
+			if (bitmap && _texture_cache_bitmap_get_hardware_format(bitmap, FALSE, TRUE))
+			{
+				point2d position;
+				real_rectangle2d clip;
+				real depth_factor;
+				real fade;
+
+				position.x = (short)fast_ftol(screen_pt.x) - render.camera.viewport_bounds.x0;
+				position.y = (short)fast_ftol(screen_pt.y) - render.camera.viewport_bounds.y0;
+				depth_factor = 1.0f -
+					((-view_pt.z - render.frustum.z_near) * 100.0f) /
+					(render.frustum.z_far - render.frustum.z_near);
+				fade = PIN(depth_factor, 0.25f, 1.0f);
+				clip.x0 = 0.0f;
+				clip.x1 = 1.0f;
+				clip.y0 = (1.0f - fade) * 0.5f;
+				clip.y1 = 1.0f;
+				interface_draw_bitmap(
+					bitmap,
+					&position,
+					&clip,
+					1.0f,
+					0.0f,
+					1.0f);
+				drew_friendly_bitmap = TRUE;
+			}
+		}
+	}
+
+	if (!drew_friendly_bitmap)
+	{
+		/* Draw a downward chevron/diamond marker instead of a flat square */
+		short cx = (short)(screen_pt.x + 0.5f);
+		short cy = (short)(screen_pt.y + 1.0f * scale + 0.5f);
+		short row;
+		for (row = 0; row < 5; row++)
+		{
+			short half_w = (short)((4 - row) * scale + 0.5f);
+			marker.x0 = cx - half_w;
+			marker.x1 = cx + half_w + 1;
+			marker.y0 = cy + (short)(row * scale);
+			marker.y1 = marker.y0 + (short)(scale + 0.5f);
+			if (marker.y1 <= marker.y0)
+				marker.y1 = marker.y0 + 1;
+			draw_quad(&marker, box_color);
+		}
+	}
 
 	ff_draw_text(
 		font_index,
 		line_height,
 		screen_pt.x - 46.0f * scale,
-		screen_pt.y - 15.5f * scale,
+		screen_pt.y - 19.5f * scale,
 		scale,
 		full_label,
 		0.0f,
@@ -652,7 +742,8 @@ static void draw_generator_bars(
 					&gen_nav,
 					gen_names[g],
 					gen->under_attack_ticks > 0 ? FF_HUD_WARN_EDGE : FF_HUD_PANEL_EDGE,
-					gen->under_attack_ticks > 0 ? &red : (gen->lockdown_ticks > 0 ? &gold : &white));
+					gen->under_attack_ticks > 0 ? &red : (gen->lockdown_ticks > 0 ? &gold : &white),
+					FALSE);
 			}
 		}
 	}
@@ -1125,9 +1216,11 @@ void firefight_hud_draw(void)
 	if (ff_state.straggler_navpoints_active && ff_state.enemies_alive > 0 && ff_state.enemies_alive <= FIREFIGHT_STRAGGLER_THRESHOLD)
 	{
 		short local_player_index = render.local_player_index;
-		short red_arrow_index = find_nav_point("default_red");
+		short red_arrow_index = find_nav_point("target_red");
 		short i;
 
+		if (red_arrow_index == NONE)
+			red_arrow_index = find_nav_point("default_red");
 		if (red_arrow_index == NONE && hud_globals && hud_globals->waypoint.arrows.count > 0)
 			red_arrow_index = (hud_globals->waypoint.arrows.count > 1) ? 1 : 0;
 
@@ -1164,7 +1257,7 @@ void firefight_hud_draw(void)
 			{
 				draw_world_navpoint(
 					font_index, line_height, scale,
-					&nav_pos, "HOSTILE", FF_HUD_WARN_EDGE, &red);
+					&nav_pos, "HOSTILE", FF_HUD_WARN_EDGE, &red, FALSE);
 			}
 		}
 	}
@@ -1177,7 +1270,7 @@ void firefight_hud_draw(void)
 			font_index, line_height, scale,
 			&ord_pos,
 			ff_state.last_ordnance_is_heavy ? "HEAVY ORDNANCE" : "ORDNANCE",
-			0xE040E070, &green);
+			0xE040E070, &green, TRUE);
 	}
 }
 

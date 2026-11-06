@@ -1,5 +1,23 @@
 # Changelog
 
+## OpenCE : Faber v2.3.3
+
+- Forge Dynamic Lighting & Light Fixture Lifecycle: fixed `_object_definition.attachments` runtime offset (`0x140`/`0x144`) in `patch_forge_device_and_light_tag_runtime`, kept attached `'ligh'` markers synchronized with moved objects (`lights_preprocess_scene`, `object_set_position`, `object_translate`), propagated transforms and deletions to secondary `creation_effect` dynamic-light scenery (`owner_object_index`), cleaned up `light_datum` instances (`light_delete_all_for_object`), and deleted orphaned attached particle systems (`particle_system_orphan`) and effects (`effect_update`) when objects are deleted.
+- Forge Slot Reuse Cleanup: ensured `forge_3d_spawn_object_at_slot` deletes any existing live object on a reused slot before overwriting it.
+
+## OpenCE : Faber v2.3.2
+
+- Forge Session Continuity: prevented Forge sessions from ending when joiners leave and only one player remains (`game_engine_should_end_game`, `multiple_teams_alive`, `slayer_player_update`), disabled the 30-second dropped-item purge (`game_engine_update_purge`) and 90-second automatic vehicle home-respawn (`game_engine_update_vehicle_respawn`) in Forge sessions, and added automatic Forge variant detection (`L"Forge"` or `score_to_win == 0x3FFFFFFF`).
+- Forge Map Saving & Custom Maps Discovery: resolved base map paths on joined clients and case-sensitive file systems via `platform_translate_path`, enabled `custom_edition_cache_present` and the Xbox cache decompressor (`cache_copy_initialize_read_data`) to load saved Xbox v5 `FLG1` Forge maps directly from `custom_maps/` (clamping `read_file_size` to the `FLG1` trailer offset at `+0x1E4`), and triggered `custom_edition_maps_look_again()` immediately after saving.
+- Forge Map Load & Host Object Persistence: fixed a false map-transition reset on the first tick in-game (`menu_tags_loaded` / `network_chat_update`), replaced `global_scenario_get()` with `global_scenario_try_and_get()` in Forge hooks, and prevented network clients from loading local sidecar edits over the Host's authoritative state.
+- Forge Multiplayer Object Sync: deterministically registered all default in-map scenery, machines, controls, and light fixtures at map load (`forge_init_map_scenario_entities`), preserved original scenario spawn/flag blocks across re-initializations, added `forge_3d_spawn_object_at_slot(forced_slot, ...)` and pending client scenery confirmation matching so Host and Client `live_idx` slots stay 1:1 aligned, and guarded `g_net_obj_live_index` with `forge_object_is_network_shared(group_tag)`.
+- Forge Rejoin Spawn & Overhead Name Tags: cleared stale Monitor coordinates when a player leaves or spawns a fresh biped (`s_player_last_unit_index`) so rejoining players spawn at valid map spawn points, and locked remote Monitor players' hidden bipeds directly beneath their interpolated 3D Monitor orb (`rz - 0.65f`) on both Server and Client so overhead player name tags track smoothly without falling.
+- Forge Custom Scenery LOD & Culling: enforced minimum `bounding_radius` (`1.5f`) and `render_bounding_radius` (`max(r * 4.0f, 8.0f)`), zeroed `super_low` LOD pixel cutoffs, backfilled missing `geometry_indices[0..4]` LODs across runtime cloning and cache baking, and clamped `level_of_detail_pixels` in `render_model` so custom scenery never vanishes at distance.
+
+## OpenCE : Faber v2.3.1
+
+- Menus: restored Faber's PC (Custom Edition-style) menus. v2.3.0 fell back to the Xbox menus because the new SERVER BROWSER settings screen (`network_setup.server_browser.xml`) was not listed in `port/assets/menus/menus.json`, so it was never embedded and the menus failed to load. The daily challenge and randomizer header art are now listed too.
+
 ## OpenCE : Faber v2.3.0
 
 - Synchronised with OpenCommunityEdition/OpenCE Build 337 (`899219cc`) and `halo-ce-universal` Build 131 (`431e9ae2`).

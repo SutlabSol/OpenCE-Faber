@@ -14,10 +14,10 @@
 extern "C" {
 #endif
 
-/* ---------- Forge Release Version & Network Protocol Isolation (v2.3.0, 0x4629) */
+/* ---------- Forge Release Version & Network Protocol Isolation (v2.3.3, 0x462B) */
 
-#define FORGE_VERSION_STRING "2.3.0"
-#define FORGE_NETWORK_VERSION 0x4629
+#define FORGE_VERSION_STRING "2.3.3"
+#define FORGE_NETWORK_VERSION 0x462B
 /* Standard (non-Forge) sessions use OpenCE's own HALO_PORT_NETWORK_VERSION
  * (port/linux/include/halo_port_limits.h), read in forge_get_network_version(),
  * so an upstream protocol bump never leaves Forge unable to join stock games. */
@@ -437,6 +437,16 @@ int32_t forge_3d_spawn_object_at(
 	float yaw, float pitch, float roll,
 	int16_t team_designator,
 	int broadcast_net);
+int32_t forge_3d_spawn_object_at_slot(
+	int32_t forced_slot,
+	uint32_t group_tag,
+	char const *tag_path,
+	uint8_t source_cache_id,
+	float x, float y, float z,
+	float yaw, float pitch, float roll,
+	int16_t team_designator,
+	int broadcast_net);
+int forge_object_is_network_shared(uint32_t group_tag);
 void forge_3d_move_instance(int32_t live_idx, float x, float y, float z, float yaw, float pitch, float roll, int broadcast_net);
 void forge_3d_move_instance_ext(int32_t live_idx, float x, float y, float z, float yaw, float pitch, float roll, int is_held, int broadcast_net);
 void forge_3d_delete_instance(int32_t live_idx, int broadcast_net);

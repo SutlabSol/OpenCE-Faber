@@ -1439,6 +1439,25 @@ static void cache_copy_initialize_read_data(
 	cache_copy_issue_read_raw(self, &self->header, sizeof(self->header), 0);
 	cache_copy_block_on_raw_read(self);
 
+	/* If this Xbox v5 cache file has an appended Forge FLG1 trailer, clamp
+	   read_file_size to the trailer offset at header+0x1E4 so zlib decompression
+	   does not read the FLG1 trailer bytes. */
+	{
+		const unsigned char *hdr_bytes = (const unsigned char *)&self->header;
+		unsigned int flg1_sig = 0;
+		unsigned int flg1_off = 0;
+		memcpy(&flg1_sig, hdr_bytes + 0x1FC, 4);
+		memcpy(&flg1_off, hdr_bytes + 0x1E4, 4);
+		if (flg1_sig == 0x464C4731u &&
+			flg1_off > (unsigned int)sizeof(self->header) &&
+			(long)flg1_off < self->read_file_size)
+		{
+			self->read_file_size = (long)flg1_off;
+			self->read_bytes_left = self->read_file_size;
+			self->async_read_bytes_left = self->read_file_size;
+		}
+	}
+
 	cache_file_header_verify(&self->header, "blah", TRUE);
 
 	self->read_bytes_left -= sizeof(self->header);

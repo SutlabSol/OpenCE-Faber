@@ -1264,6 +1264,10 @@ boolean custom_edition_cache_present(
 			(int)MIN(64, map_share_name_base_length(name)), name);
 		return FALSE;
 	}
+	if (is_xbox_flg1_forge_map(path))
+	{
+		return TRUE;
+	}
 	if (!halo_custom_edition_tag_cache())
 	{
 		error(_error_silent, "custom edition: the map '%s' cannot be played: %s", level_name,

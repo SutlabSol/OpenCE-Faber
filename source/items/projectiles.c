@@ -753,6 +753,19 @@ boolean projectile_update(
 			326,
 			&projectile->object.translational_velocity);
 
+		if (projectile->projectile.ignore_object_index != NONE &&
+			!object_try_and_get(projectile->projectile.ignore_object_index))
+		{
+			projectile->projectile.ignore_object_index = NONE;
+			ignore_object_index = NONE;
+		}
+
+		if (projectile->projectile.target_object_index != NONE &&
+			!unit_try_and_get(projectile->projectile.target_object_index))
+		{
+			projectile->projectile.target_object_index = NONE;
+		}
+
 		if (projectile->projectile.target_object_index != NONE &&
 			definition->projectile.guided_angular_velocity > 0.0f)
 		{

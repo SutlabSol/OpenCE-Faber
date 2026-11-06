@@ -3403,7 +3403,9 @@ void pc_menu_game_data_function_invoke(
 
 int forge_is_main_menu_active(void)
 {
-	struct scenario *scen = global_scenario_get();
+	/* (try_and_get: menu_tags_loaded runs inside scenario_tags_load, before
+	 * scenario_load sets global_scenario, and global_scenario_get asserts on NULL) */
+	struct scenario *scen = global_scenario_try_and_get();
 	char const *loaded = cache_file_loaded_map_name();
 	char const *cur_map = main_get_map_name();
 	if (!scen || scen->type == 2 /* _scenario_type_main_menu */)
@@ -3413,6 +3415,77 @@ int forge_is_main_menu_active(void)
 	if (cur_map && (_stricmp(cur_map, "levels\\ui\\ui") == 0 || _stricmp(cur_map, "ui") == 0))
 		return 1;
 	return 0;
+}
+
+/* Whether two map names name the same map: their leaves (after the last \\ or /), in any case.
+ * cache_file_loaded_map_name() and main_get_map_name() can name one map differently. */
+static int forge_same_map_leaf(char const *a, char const *b)
+{
+	char const *la, *lb, *s;
+	if (!a || !b)
+		return 0;
+	la = a;
+	for (s = a; *s; s++)
+		if (*s == '\\' || *s == '/')
+			la = s + 1;
+	lb = b;
+	for (s = b; *s; s++)
+		if (*s == '\\' || *s == '/')
+			lb = s + 1;
+	return _stricmp(la, lb) == 0;
+}
+
+/* Forget the per-map Forge session: what is held, hovered and open, the live instances and, with
+ * clear_edits, the map's edits, its save name and the Forge network session. Runs when a map is
+ * unloaded and when a running game moves to another map; never on a freshly loaded map's first
+ * tick, which would wipe the placements forge_load_saved_map_state_if_present just restored. */
+static void forge_reset_transient_session_state(int clear_edits)
+{
+	g_forge.monitor_cam_initialized = 0;
+	g_forge.active_modal = _forge_modal_none;
+	g_forge.grabbed_live_index = -1;
+	g_forge.grabbed_object_index = NONE;
+	g_forge.grabbed_is_new_spawn = 0;
+	g_forge.hovered_object_index = NONE;
+	g_forge.hovered_live_index = -1;
+	g_forge.hovered_object_label[0] = 0;
+	g_forge.live_instance_count = 0;
+	if (clear_edits)
+	{
+		g_forge.has_saved_map_once = 0;
+		g_forge.save_map_name[0] = 0;
+		g_forge.save_map_name_len = 0;
+		memset(&g_forge.edit_state, 0, sizeof(g_forge.edit_state));
+		forge_network_reset_session();
+	}
+}
+
+static int forge_variant_named_forge(wchar_t const *name)
+{
+	static wchar_t const forge_name[] = { 'F', 'o', 'r', 'g', 'e', 0 };
+	int i;
+	for (i = 0; forge_name[i]; i++)
+		if (name[i] != forge_name[i])
+			return 0;
+	return name[i] == 0;
+}
+
+/* A game started or joined through the standard menus rather than Forge's own entry point still
+ * runs Forge's variant ("Forge", endless score_to_win, forge_hooks.c's variant builder), which the
+ * host's game settings carry to every client: such a game is a Forge session on this machine too. */
+static void forge_detect_forge_variant(void)
+{
+	struct game_variant const *v;
+	if (g_forge_session_enabled)
+		return;
+	v = game_engine_get_variant();
+	if (!v)
+		return;
+	if (v->universal_variant.score_to_win == 0x3FFFFFFF ||
+		forge_variant_named_forge(v->human_readable_game_description))
+	{
+		g_forge_session_enabled = 1;
+	}
 }
 
 void network_chat_update(void)
@@ -3462,24 +3535,18 @@ void network_chat_update(void)
 		return;
 	}
 
-	/* Reset per-map monitor state when switching maps */
-	if (cur_map && strcmp(cur_map, g_last_forge_map_name) != 0)
+	forge_detect_forge_variant();
+
+	/* Reset per-map Forge state only when a running game moves to another map. A freshly loaded
+	 * map's first tick has no previous name (menu_tags_loaded/unloaded clear it, and the unload
+	 * already reset the session), so it only records the name: resetting there wiped the edits
+	 * and live placements just restored, and dropped the host's placed objects when a client joined. */
+	if (cur_map && cur_map[0] && !forge_same_map_leaf(cur_map, g_last_forge_map_name))
 	{
+		int had_previous_map = (g_last_forge_map_name[0] != 0);
 		snprintf(g_last_forge_map_name, sizeof(g_last_forge_map_name), "%s", cur_map);
-		g_forge.monitor_cam_initialized = 0;
-		g_forge.active_modal = _forge_modal_none;
-		g_forge.grabbed_live_index = -1;
-		g_forge.grabbed_object_index = NONE;
-		g_forge.grabbed_is_new_spawn = 0;
-		g_forge.hovered_object_index = NONE;
-		g_forge.hovered_live_index = -1;
-		g_forge.hovered_object_label[0] = 0;
-		g_forge.live_instance_count = 0;
-		g_forge.has_saved_map_once = 0;
-		g_forge.save_map_name[0] = 0;
-		g_forge.save_map_name_len = 0;
-		memset(&g_forge.edit_state, 0, sizeof(g_forge.edit_state));
-		forge_network_reset_session();
+		if (had_previous_map)
+			forge_reset_transient_session_state(1);
 		forge_normalize_mcc_hud_tags();
 	}
 
@@ -3760,6 +3827,28 @@ void render_model(
 	if (unique_identifier != NONE && firefight_is_generator_hidden_biped(unique_identifier))
 		return;
 
+	/* Prevent custom scenery, machines, controls, and light fixtures from vanishing due to aggressive LOD cutoffs */
+	if (unique_identifier != NONE && model_index != NONE)
+	{
+		struct object_datum *lod_obj = (struct object_datum *)object_try_and_get_and_verify_type(
+			unique_identifier,
+			_object_mask_scenery | _object_mask_machine | _object_mask_light_fixture | _object_mask_control);
+		if (lod_obj)
+		{
+			uint8_t *mbuf = (uint8_t *)tag_get('mode', model_index);
+			if (mbuf)
+			{
+				int32_t g_cnt = *(int32_t const *)(mbuf + 0xD0u);
+				float hi_cut = *(float const *)(mbuf + 0x18u);
+				*(float *)(mbuf + 0x08u) = 0.0f;
+				if (level_of_detail_pixels < 32.0f)
+					level_of_detail_pixels = 32.0f;
+				if (g_cnt <= 1 && level_of_detail_pixels < hi_cut + 1.0f)
+					level_of_detail_pixels = hi_cut + 1.0f;
+			}
+		}
+	}
+
 	if (g_forge_session_enabled && g_forge.initialized && !forge_is_main_menu_active())
 	{
 		if (unique_identifier != NONE)
@@ -3916,12 +4005,9 @@ void menu_tags_unloaded(void)
 	forge_runtime_on_map_unload();
 	s_save_forge_btn_tag = NONE;
 	g_last_forge_map_name[0] = 0;
-	g_forge.monitor_cam_initialized = 0;
-	g_forge.live_instance_count = 0;
-	g_forge.grabbed_live_index = -1;
-	g_forge.grabbed_object_index = NONE;
-	g_forge.hovered_live_index = -1;
-	g_forge.hovered_object_index = NONE;
+	/* (the map's edits, save name and Forge network session go with it, so the next map starts
+	 * clean without network_chat_update resetting it after its saved state is restored) */
+	forge_reset_transient_session_state(1);
 	if (s_pause_saved_instances)
 	{
 		cache_files_set_tag_instances(s_pause_saved_instances, s_pause_saved_count);
@@ -3961,6 +4047,10 @@ void menu_tags_loaded(char const *map_name)
 		dispose_global_network_game_server();
 		network_game_accept_remote_connections(FALSE);
 	}
+	/* (g_last_forge_map_name stays empty: global_scenario is still NULL here, inside
+	 * scenario_tags_load, so forge_get_active_map_name() could only name the UI map) */
+	if (map_name && _stricmp(map_name, "ui") != 0 && _stricmp(map_name, "levels\\ui\\ui") != 0)
+		forge_detect_forge_variant();
 
 	/* Patch "SAVE FORGE MAP" button into the in-game Escape Pause Menu when in a Forge session */
 	if (g_forge_session_enabled && map_name && strcmp(map_name, "ui") != 0)

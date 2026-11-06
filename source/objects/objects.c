@@ -322,7 +322,13 @@ void *object_get_and_verify_type(
 	long object_index,
 	unsigned long valid_type_flags)
 {
-	struct object_datum *result = object_header_get(object_index)->datum;
+	struct object_header_datum *header = object_header_get(object_index);
+	struct object_datum *result;
+
+	if (!header || !header->datum)
+		return NULL;
+
+	result = header->datum;
 
 	match_vassert(
 		"c:\\halo\\SOURCE\\objects\\objects.c",
@@ -399,8 +405,10 @@ long object_get_ultimate_parent(
 	struct object_datum *object;
 	for (;object_index!=NONE; object_index = object->object.parent_object_index)
 	{
+		object = object_try_and_get(object_index);
+		if (!object)
+			break;
 		result = object_index;
-		object = object_get(object_index);
 	}
 
 	return result;
@@ -1448,6 +1456,7 @@ void object_set_visibility(
 	struct object_datum *object = object_get(object_index);
 	struct object_definition *object_definition = object_definition_get(object->definition_index);
 
+	/* port: also disconnect lights when hiding/deleting a model-less light object */
 	if (object_definition->object.model.index!=NONE)
 	{
 		if (TEST_FLAG(object->object.flags, _object_invisible_bit) && visible_flag)
@@ -1458,6 +1467,10 @@ void object_set_visibility(
 		{
 			object_connect_lights(object_index, TRUE, FALSE);
 		}
+	}
+	else if (!visible_flag && TEST_FLAG(object->object.flags, _object_has_attached_lights_bit))
+	{
+		object_connect_lights(object_index, TRUE, FALSE);
 	}
 
 	if (!visible_flag || object_definition->object.model.index!=NONE)
@@ -1977,6 +1990,27 @@ static void object_delete_initial_recursive(
 	SET_FLAG(header->flags, _object_header_being_deleted_bit, TRUE);
 
 	object_set_visibility(object_index, FALSE);
+	/* port: immediately remove any attached or unattached light_datum and secondary creation_effect light/scenery objects */
+	light_delete_all_for_object(object_index);
+	{
+		short sub_i;
+		struct object_header_datum *sub_hdr = (struct object_header_datum *)object_header_data->data;
+		for (sub_i = 0; sub_i < object_header_data->count; ++sub_i, ++sub_hdr)
+		{
+			if (sub_hdr->identifier && sub_hdr->datum &&
+				!TEST_FLAG(sub_hdr->flags, _object_header_being_deleted_bit) &&
+				sub_hdr->datum->object.owner_object_index == object_index &&
+				(sub_hdr->type == _object_type_scenery ||
+				 sub_hdr->type == _object_type_light_fixture ||
+				 sub_hdr->type == _object_type_sound_scenery ||
+				 sub_hdr->type == _object_type_placeholder))
+			{
+				long sub_obj_idx = DATUM_INDEX_NEW(sub_i, sub_hdr->identifier);
+				if (sub_obj_idx != object_index)
+					object_delete_initial_recursive(sub_obj_idx, FALSE);
+			}
+		}
+	}
 	object_name_list_delete(object_index);
 
 	return;
@@ -3497,6 +3531,8 @@ static void attachments_new(
 			if (attachment_index!=NONE)
 			{
 				SET_FLAG(object->object.flags, _object_has_attached_lights_bit, TRUE);
+				/* port: mark object so dynamic lighting recomputes when attached light is created */
+				SET_FLAG(object->object.flags, _object_dynamic_lighting_recompute_bit, TRUE);
 			}
 			break;
 		case _object_attachment_type_looping_sound:
@@ -3541,6 +3577,9 @@ void object_set_position(
 	real_vector3d const *up)
 {
 	struct object_datum *object = object_get(object_index);
+	real_point3d old_position = object->object.position;
+	real_vector3d old_forward = object->object.forward;
+	real_vector3d old_up = object->object.up;
 
 	object_disconnect_from_map(object_index);
 
@@ -3571,6 +3610,44 @@ void object_set_position(
 
 	object_compute_node_matrices(object_index);
 	object_reconnect_to_map(object_index, NULL);
+	/* port: update attached light positions/cluster links and move any secondary creation_effect light objects */
+	if (TEST_FLAG(object->object.flags, _object_has_attached_lights_bit))
+	{
+		object_connect_lights(object_index, TRUE, TRUE);
+	}
+	{
+		short sub_i;
+		struct object_header_datum *sub_hdr = (struct object_header_datum *)object_header_data->data;
+		for (sub_i = 0; sub_i < object_header_data->count; ++sub_i, ++sub_hdr)
+		{
+			if (sub_hdr->identifier && sub_hdr->datum &&
+				!TEST_FLAG(sub_hdr->flags, _object_header_being_deleted_bit) &&
+				sub_hdr->datum->object.owner_object_index == object_index &&
+				sub_hdr->datum->object.parent_object_index == NONE &&
+				(sub_hdr->type == _object_type_scenery ||
+				 sub_hdr->type == _object_type_light_fixture ||
+				 sub_hdr->type == _object_type_sound_scenery ||
+				 sub_hdr->type == _object_type_placeholder))
+			{
+				long sub_obj_idx = DATUM_INDEX_NEW(sub_i, sub_hdr->identifier);
+				if (sub_obj_idx != object_index)
+				{
+					real_matrix4x3 old_mat, inv_old_mat, new_mat, sub_mat, out_mat;
+					matrix4x3_from_point_and_vectors(&old_mat, &old_position, &old_forward, &old_up);
+					matrix4x3_inverse(&old_mat, &inv_old_mat);
+					matrix4x3_from_point_and_vectors(&new_mat, &object->object.position, &object->object.forward, &object->object.up);
+					matrix4x3_from_point_and_vectors(
+						&sub_mat,
+						&sub_hdr->datum->object.position,
+						&sub_hdr->datum->object.forward,
+						&sub_hdr->datum->object.up);
+					matrix4x3_multiply(&inv_old_mat, &sub_mat, &sub_mat);
+					matrix4x3_multiply(&new_mat, &sub_mat, &out_mat);
+					object_set_position(sub_obj_idx, &out_mat.position, &out_mat.forward, &out_mat.up);
+				}
+			}
+		}
+	}
 
 	return;
 }
@@ -3581,15 +3658,52 @@ void object_translate(
 	struct location const *new_location)
 {
 	struct object_datum *object = object_get(object_index);
+	real_vector3d delta;
 
 	match_assert_valid_real_point3d(
 		"c:\\halo\\SOURCE\\objects\\objects.c",
 		562, 
 		new_position);
 
+	delta.i = new_position->x - object->object.position.x;
+	delta.j = new_position->y - object->object.position.y;
+	delta.k = new_position->z - object->object.position.z;
+
 	object_disconnect_from_map(object_index);
 	object->object.position = *new_position;
+	/* port: recompute node matrices so markers and attached lights follow translated objects */
+	object_compute_node_matrices(object_index);
 	object_reconnect_to_map(object_index, new_location);
+	if (TEST_FLAG(object->object.flags, _object_has_attached_lights_bit))
+	{
+		object_connect_lights(object_index, TRUE, TRUE);
+	}
+	{
+		short sub_i;
+		struct object_header_datum *sub_hdr = (struct object_header_datum *)object_header_data->data;
+		for (sub_i = 0; sub_i < object_header_data->count; ++sub_i, ++sub_hdr)
+		{
+			if (sub_hdr->identifier && sub_hdr->datum &&
+				!TEST_FLAG(sub_hdr->flags, _object_header_being_deleted_bit) &&
+				sub_hdr->datum->object.owner_object_index == object_index &&
+				sub_hdr->datum->object.parent_object_index == NONE &&
+				(sub_hdr->type == _object_type_scenery ||
+				 sub_hdr->type == _object_type_light_fixture ||
+				 sub_hdr->type == _object_type_sound_scenery ||
+				 sub_hdr->type == _object_type_placeholder))
+			{
+				long sub_obj_idx = DATUM_INDEX_NEW(sub_i, sub_hdr->identifier);
+				if (sub_obj_idx != object_index)
+				{
+					real_point3d sub_pos;
+					sub_pos.x = sub_hdr->datum->object.position.x + delta.i;
+					sub_pos.y = sub_hdr->datum->object.position.y + delta.j;
+					sub_pos.z = sub_hdr->datum->object.position.z + delta.k;
+					object_translate(sub_obj_idx, &sub_pos, NULL);
+				}
+			}
+		}
+	}
 
 	return;
 }
@@ -5234,6 +5348,8 @@ static void attachments_delete(
 			}
 		}
 	}
+	/* port: also remove any unattached or residual light_datum referencing this object */
+	light_delete_all_for_object(object_index);
 
 	return;
 }
