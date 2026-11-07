@@ -255,6 +255,7 @@ def windows_configure_inputs() -> List[Path]:
         Path(__file__).with_name("windows_cross_build.py"),
         PORT_CONFIG,
         PORT_DIR / "src",
+        FORGE_DIR / "include" / "forge_engine.h",
         LINUX_DIR / "src",
         LINUX_DIR / "game",
         *hud_configure_inputs(),

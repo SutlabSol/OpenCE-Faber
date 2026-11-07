@@ -1,5 +1,9 @@
 # Changelog
 
+## OpenCE : Faber v2.3.4
+
+- Self-Updater Build Number & Relaunch Fix: derived the local build number in `updater.c` directly from `FORGE_VERSION_STRING` (`forge_engine.h`) and registered `forge_engine.h` as a Ninja configure input in `tools/windows_build.py` so `HALO_BUILD_NUMBER` never lags behind `FORGE_VERSION_STRING` across incremental builds (fixing the `232` -> `233` endless update loop). Cleaned up `OpenCE - Faber.exe.old` on startup and ensured post-update relaunch starts `OpenCE - Faber.exe`.
+
 ## OpenCE : Faber v2.3.3
 
 - Forge Dynamic Lighting & Light Fixture Lifecycle: fixed `_object_definition.attachments` runtime offset (`0x140`/`0x144`) in `patch_forge_device_and_light_tag_runtime`, kept attached `'ligh'` markers synchronized with moved objects (`lights_preprocess_scene`, `object_set_position`, `object_translate`), propagated transforms and deletions to secondary `creation_effect` dynamic-light scenery (`owner_object_index`), cleaned up `light_datum` instances (`light_delete_all_for_object`), and deleted orphaned attached particle systems (`particle_system_orphan`) and effects (`effect_update`) when objects are deleted.

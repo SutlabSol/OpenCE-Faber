@@ -28,6 +28,7 @@ update.h's: posix_update.c on Linux, win32_update.c on Windows.
 #include "platform.h"
 #include "port_config.h"
 #include "update.h"
+#include "../../forge/include/forge_engine.h"
 
 /* the release's build that this one updates to (halo-<platform>-<release|
 debug>.zip); a build without one never looks for updates */
@@ -434,6 +435,16 @@ static long parse_release_version_number(const char *tag_str)
 	return num;
 }
 
+static int updater_local_build_number(void)
+{
+#ifdef FORGE_VERSION_STRING
+	long parsed = parse_release_version_number(FORGE_VERSION_STRING);
+	if (parsed > 0)
+		return (int)parsed;
+#endif
+	return (int)HALO_BUILD_NUMBER;
+}
+
 /* the build number of GitHub's latest release, 0 if there is none */
 static long updater_latest_release(void)
 {
@@ -531,11 +542,12 @@ static long updater_latest_release(void)
 static int SDLCALL updater_check_thread(void *context)
 {
 	long latest = updater_latest_release();
+	int local_build = updater_local_build_number();
 
 	(void)context;
-	if (latest > HALO_BUILD_NUMBER)
+	if (latest > (long)local_build)
 	{
-		platform_log("update: build %ld is available (this is build %d)", latest, HALO_BUILD_NUMBER);
+		platform_log("update: build %ld is available (this is build %d)", latest, local_build);
 		updater_latest_build = latest;
 		updater_latest_network_version = updater_release_network_version;
 		SDL_SetAtomicInt(&updater_state, _updater_available);
@@ -543,7 +555,7 @@ static int SDLCALL updater_check_thread(void *context)
 	else
 	{
 		if (latest)
-			platform_log("update: this is the latest build (%d)", HALO_BUILD_NUMBER);
+			platform_log("update: this is the latest build (%d)", local_build);
 		SDL_SetAtomicInt(&updater_state, _updater_handled);
 	}
 	return 0;
@@ -778,9 +790,15 @@ static void updater_update(void)
 	{
 		if (updater_replace_files(names, name_count, error, sizeof(error)))
 		{
+			char faber_exe[1200];
+			const char *launch_exe = updater_executable;
+
 			update_delete_file(partial);
-			platform_log("update: starting build %ld", updater_latest_build);
-			if (update_launch(updater_executable))
+			updater_path(faber_exe, sizeof(faber_exe), "OpenCE - Faber.exe");
+			if (SDL_GetPathInfo(faber_exe, NULL))
+				launch_exe = faber_exe;
+			platform_log("update: starting build %ld (%s)", updater_latest_build, launch_exe);
+			if (update_launch(launch_exe))
 				exit(EXIT_SUCCESS);
 			snprintf(error, sizeof(error), "the new version is in place, but could not be started: start it again");
 		}
@@ -800,9 +818,9 @@ static void updater_clean_up(void)
 {
 	static const char *const names[] =
 	{
-		"halo.old", "halo.exe.old", "SDL3.dll.old", "libSDL3.so.0.old", "SDL3-LICENSE.txt.old",
-		"extract-xiso-LICENSE.txt.old", "mbedtls-LICENSE.txt.old", "LICENSE.txt.old",
-		"extract-xiso-LICENSE.txt",
+		"OpenCE - Faber.exe.old", "halo.old", "halo.exe.old", "SDL3.dll.old", "libSDL3.so.0.old",
+		"SDL3-LICENSE.txt.old", "extract-xiso-LICENSE.txt.old", "mbedtls-LICENSE.txt.old",
+		"LICENSE.txt.old", "extract-xiso-LICENSE.txt",
 	};
 	char path[1200];
 	size_t index;
@@ -835,7 +853,7 @@ void updater_start(void)
 	updater_clean_up();
 	/* (not for builds without a number, the player's no, or runs nobody is
 	watching, but for a test with its answer) */
-	if (HALO_BUILD_NUMBER <= 0)
+	if (updater_local_build_number() <= 0)
 	{
 		platform_log("update: not looked for: only the builds CI numbers update themselves (this one has no "
 			"number)");
@@ -1065,7 +1083,7 @@ void updater_poll(SDL_Window *window)
 	if (updater_gamescope())
 	{
 		platform_log("update: build %ld is out (this is build %d); not asking under gamescope (Steam Deck Game Mode)",
-			updater_latest_build, HALO_BUILD_NUMBER);
+			updater_latest_build, updater_local_build_number());
 		return;
 	}
 	/* (a dialog cannot show above a fullscreen game) */
@@ -1076,7 +1094,7 @@ void updater_poll(SDL_Window *window)
 		"A new version of OpenCE : Faber was detected (%s / build %ld; this is build %d).\n\n"
 		"Do you want to update now? The game will close and start the new version.",
 		updater_latest_tag[0] ? updater_latest_tag : "latest",
-		updater_latest_build, HALO_BUILD_NUMBER);
+		updater_latest_build, updater_local_build_number());
 	{
 		SDL_MessageBoxData question = { SDL_MESSAGEBOX_INFORMATION, window, "OpenCE : Faber - Update Available", message,
 			3, question_buttons, NULL };
